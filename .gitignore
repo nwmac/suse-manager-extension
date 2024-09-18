@@ -70,3 +70,5 @@ Thumbs.db
 
 # built extension folder
 /dist-pkg
+
+/proxy/src/susemanagerproxy

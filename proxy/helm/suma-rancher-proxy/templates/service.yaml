@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: suse-manager-rancher-proxy
+  namespace: suse-manager
+spec:
+  type: ClusterIP
+  ports:
+  - name: "suse-manager-rancher-proxy"
+    port: 5443
+  selector:
+    app: suse-manager-rancher-proxy
+  

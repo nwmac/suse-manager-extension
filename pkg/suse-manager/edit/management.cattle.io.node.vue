@@ -3,11 +3,16 @@ import createEditView from '@shell/mixins/create-edit-view';
 import CruResource from '@shell/components/CruResource';
 import Loading from '@shell/components/Loading';
 import { LabeledInput } from '@components/Form/LabeledInput';
-import { NORMAN } from '@shell/config/types';
+import { CAPI, MANAGEMENT, NORMAN } from '@shell/config/types';
 import ResourceTabs from '@shell/components/form/ResourceTabs';
 import Tab from '@shell/components/Tabbed/Tab';
 import SortableTable from '@shell/components/SortableTable';
 import { _VIEW } from '@shell/config/query-params';
+import { sumaSystemForNode } from '../shared/utils';
+import SumaServerInfo from '../components/SumaServerInfo';
+
+const SUSE_MANAGER_LINK_ANNOTATION = 'susemanager.cattle.io/link';
+
 export default {
   components: {
     CruResource,
@@ -15,7 +20,8 @@ export default {
     LabeledInput,
     ResourceTabs,
     Tab,
-    SortableTable
+    SortableTable,
+    SumaServerInfo
   },
   mixins: [createEditView],
   props:  {
@@ -27,13 +33,43 @@ export default {
   async fetch() {
     // we need this to populate the NORMAN node... getNorman
     await this.$store.dispatch('rancher/findAll', { type: NORMAN.NODE });
+
+    console.log(this.value);
+    console.log(this.value.mgmtClusterId);
+
+    // For the SUMA Patches
+    const mgmtCluster = await this.$store.dispatch('management/find', {
+      type: MANAGEMENT.CLUSTER,
+      id:   this.value.mgmtClusterId,
+      opt:  { watch: false }
+    });
+
+    const provCluster = await this.$store.dispatch('management/find', {
+      type: CAPI.RANCHER_CLUSTER,
+      id:   mgmtCluster.provClusterId,
+      opt:  { watch: false }
+    });
+
+    const suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+
+    console.error('NODE');
+    console.error(suseManagerLink);
+    this.suseManagerLink = suseManagerLink;
   },
   data() {
     return {
+      suseManagerLink:    false,
       viewMode:           _VIEW,
       name:                '',
       loading:             true,
       sumaPatchesHeaders: [
+        {
+          name:      'advisory-type',
+          labelKey:  'suma.node-details.cols.advisory-type',
+          value:     'severity',
+          sort:      'severitySort',
+          formatter: 'Severity',
+        },
         {
           name:          'advisory-name',
           labelKey:      'suma.node-details.cols.advisory-name',
@@ -42,22 +78,16 @@ export default {
           formatter:     'Link',
           formatterOpts: { urlKey: 'sumaErrataUrl' },
         },
-        {
-          name:     'status',
-          labelKey: 'suma.node-details.cols.advisory-status',
-          value:    'status',
-          sort:     'status',
-        },
-        {
-          name:     'advisory-type',
-          labelKey: 'suma.node-details.cols.advisory-type',
-          value:    'advisory_type',
-          sort:     'advisory_type',
-        },
+        // {
+        //   name:     'status',
+        //   labelKey: 'suma.node-details.cols.advisory-status',
+        //   value:    'status',
+        //   sort:     'status',
+        // },
         {
           name:     'advisory-synopsis',
           labelKey: 'suma.node-details.cols.advisory-synopsis',
-          value:    'advisory_synopsis',
+          value:    'synopsis',
           sort:     'advisory_synopsis',
         },
         {
@@ -91,17 +121,50 @@ export default {
     doneLocationOverride() {
       return this.value.doneOverride;
     },
-    sumaPatches() {
-      const sumaSystems = this.$store.getters['suma-store/getSumaSystems'];
-      const currSystem = sumaSystems.find(g => g?.profile_name === this.value.nameDisplay);
-      let sumaPatches = [];
 
-      if (currSystem) {
-        sumaPatches = currSystem.listLatestUpgradablePackages;
+    sumaSystem() {
+      const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
+      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
+
+      console.error(sumaSystem);
+
+      return sumaSystem;
+    },
+
+    sumaPatches() {
+      console.log(this);
+
+      const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
+
+      console.log(sumaSystems);
+
+      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
+
+      console.error(sumaSystem);
+
+      // const sumaSystems = this.$store.getters['suma/getSumaSystems'];
+      // const currSystem = sumaSystems.find(g => g?.profile_name === this.value.nameDisplay);
+      // let sumaPatches = [];
+
+      // if (currSystem) {
+      //   sumaPatches = currSystem.listLatestUpgradablePackages;
+      // }
+
+      // return sumaPatches;
+      return sumaSystem?.listLatestUpgradablePackages || [];
+    },
+
+    loadingPatchList() {
+      const loading = this.$store.getters['suma/getSystemGroupLoadingStatus'](this.suseManagerLink);
+      const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
+      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
+
+      if (sumaSystem) {
+        return false;
       }
 
-      return sumaPatches;
-    },
+      return loading?.loading;
+    }
   },
 };
 </script>
@@ -133,16 +196,28 @@ export default {
       </Tab>
       <Tab
         v-if="mode === viewMode"
-        name="suma-patches"
-        label-key="suma.node-details.tabs.patches"
+        name="suma-server"
+        label-key="suma.node-details.tabs.server"
         :weight="4"
       >
+        <SumaServerInfo
+          :node="value"
+          :system="sumaSystem"
+          />
+      </Tab>
+      <Tab
+        v-if="mode === viewMode"
+        name="suma-patches"
+        label-key="suma.node-details.tabs.patches"
+        :weight="3"
+      >
         <SortableTable
+          :loading="loadingPatchList"
           :headers="sumaPatchesHeaders"
           :rows="sumaPatches"
           :table-actions="false"
           :row-actions="true"
-          default-sort-by="suma-update-date"
+          default-sort-by="advisory-type"
         />
       </Tab>
     </ResourceTabs>

@@ -15,7 +15,7 @@ export default {
   },
 
   computed: {
-    ...mapGetters('suma-store', ['getSumaActionsInProgress', 'getNotifications']),
+    ...mapGetters('suma', ['getSumaActionsInProgress', 'getNotifications']),
     clusterName() {
       // this is where we get vital information from (either cluster or node details depending on the view)
       const currScreenValueProp = this.$parent?.$parent?.value;
@@ -46,7 +46,7 @@ export default {
       const uniqueSystemIds = [...new Set(this.getSumaActionsInProgress.map(ev => ev.sid))];
 
       uniqueSystemIds.forEach((sid) => {
-        reqs[sid] = this.$store.dispatch('suma-store/updateSystemEventsList', {
+        reqs[sid] = this.$store.dispatch('suma/updateSystemEventsList', {
           store: this.$store,
           sid
         });
@@ -73,7 +73,7 @@ export default {
 
           // update data on screen... Needs a delay for the SUMA api to update
           setTimeout(() => {
-            this.$store.dispatch('suma-store/fetchSumaSystemsList', {
+            this.$store.dispatch('suma/fetchSumaSystemsList', {
               store:       this.$store,
               clusterName: this.clusterName
             });
@@ -81,7 +81,7 @@ export default {
 
           // max time to update on the backend is 60sec, let's do it one last time in 50sec
           setTimeout(() => {
-            this.$store.dispatch('suma-store/fetchSumaSystemsList', {
+            this.$store.dispatch('suma/fetchSumaSystemsList', {
               store:       this.$store,
               clusterName: this.clusterName
             });

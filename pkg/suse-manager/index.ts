@@ -4,8 +4,8 @@ import {
 } from '@shell/core/types';
 import { MANAGEMENT, CAPI } from '@shell/config/types';
 import Vue from 'vue';
-import sumaStore from './store/suma-store';
-import { sumaScheduleApplyErrata } from './modules/sumaApi';
+import sumaStore from './store/suma';
+import { sumaScheduleApplyErrata } from './shared/api';
 
 // Register local formatters
 const components = require.context('./components/formatter', false, /[A-Z]\w+\.(vue)$/);
@@ -25,8 +25,21 @@ export default function(plugin: IPlugin, args:any) {
   // Provide plugin metadata from package.json
   plugin.metadata = require('./package.json');
 
+  // Built-in icon
+  plugin.metadata.icon = require('./suma_icon.png');
+
   // create new SUMA store
   plugin.addDashboardStore(sumaStore.config.namespace, sumaStore.specifics, sumaStore.config);
+
+  // Load a product
+  plugin.addProduct(require('./product'));
+
+  // Add a route
+  plugin.addRoute({
+    name: 'c-cluster-manager-suma',
+    path: '/c/:cluster/manager/suma',
+    component: () => import('./list/susemanager.cattle.io.manager.vue').then((m) => m.default),
+  });
 
   // add hidden panel to retrieve data
   plugin.addPanel(
@@ -51,20 +64,19 @@ export default function(plugin: IPlugin, args:any) {
     {
       name:          'suma-patches',
       labelKey:      'suma.cluster-details.patches-col',
-      formatter:     'InternalLinkUpdatingIndicator',
+      formatter:     'PatchCount',
       formatterOpts: {
-        loadingGetter: 'suma-store/areSumaActionsInProgress',
-        urlKey:        'sumaPatchesListLink'
+        loadingGetter: 'suma/areSumaActionsInProgress',
+        urlKey:        (row: any) => {
+          const detailLocation = row.detailLocation;
+
+          return {
+            ...detailLocation,
+            hash: '#suma-patches',
+          };
+        }
       },
       dashIfEmpty: true,
-      getValue:    (row: any) => {
-        const sumaSystems = args.store.getters['suma-store/getSumaSystems'];
-        const currSystem = sumaSystems.find((g: any) => {
-          return g?.profile_name === row.nameDisplay;
-        });
-
-        return currSystem?.listLatestUpgradablePackages?.length ? `${ currSystem?.listLatestUpgradablePackages?.length }` : '---';
-      },
       width:  100,
       sort:   ['suma-patches'],
       search: ['suma-patches'],
@@ -81,19 +93,21 @@ export default function(plugin: IPlugin, args:any) {
       labelKey: 'suma.cluster-details.table-actions.patch-os',
       icon:     'icon-play',
       enabled(ctx: any) {
-        const areSumaActionsInProgress = args.store.getters['suma-store/areSumaActionsInProgress'](ctx.nameDisplay);
-        const sumaSystems = args.store.getters['suma-store/getSumaSystems'];
-        const sumaSystemFound = sumaSystems.find((s: any) => s.profile_name === ctx.nameDisplay);
+        // const areSumaActionsInProgress = args.store.getters['suma/areSumaActionsInProgress'](ctx.nameDisplay);
+        // const sumaSystems = args.store.getters['suma/getSumaSystems'];
+        // const sumaSystemFound = sumaSystems.find((s: any) => s.profile_name === ctx.nameDisplay);
 
-        if (areSumaActionsInProgress) {
-          return false;
-        }
+        // if (areSumaActionsInProgress) {
+        //   return false;
+        // }
 
-        return !!sumaSystemFound;
+        // return !!sumaSystemFound;
+        console.error(ctx);
+        return false;
       },
       invoke(opts: ActionOpts, values: any[]) {
         const node = values[0];
-        const sumaSystems = args.store.getters['suma-store/getSumaSystems'];
+        const sumaSystems = args.store.getters['suma/getSumaSystems'];
         const sumaSystemFound = sumaSystems.find((s: any) => s.profile_name === node.nameDisplay);
 
         // TODO: change logic to schedule patches application all in one go

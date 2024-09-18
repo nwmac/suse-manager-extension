@@ -1,5 +1,5 @@
 import Resource from '@shell/plugins/dashboard-store/resource-class';
-import { sumaScheduleApplyErrata } from '../modules/sumaApi';
+import { sumaScheduleApplyErrata } from '../shared/api';
 import { SUMA_CONFIG } from '../suma-config';
 
 export default class SumaPatches extends Resource {
@@ -16,28 +16,44 @@ export default class SumaPatches extends Resource {
 
   applySinglePatch() {
     let sumaSystemFound;
-    const sumaSystems = this.store.getters['suma-store/getSumaSystems'];
 
-    sumaSystems.forEach((system) => {
-      if (system.listLatestUpgradablePackages?.length) {
-        system.listLatestUpgradablePackages.forEach((pkg) => {
-          if (pkg.id === this.id) {
-            sumaSystemFound = system;
-          }
-        });
-      }
-    });
+    console.error(this);
 
-    if (sumaSystemFound) {
-      sumaScheduleApplyErrata(this.store, [sumaSystemFound.id], [this.id]);
+    if (this.suma) {
+      console.error('applySinglePatch');
+      console.error(this.suma.suseManagerId);
+      sumaScheduleApplyErrata(this.store, this.suma.suseManagerId, [this.suma.systemId], [this.id]);
     }
+
+    // const sumaSystems = this.store.getters['suma/getSumaSystems'];
+
+    // sumaSystems.forEach((system) => {
+    //   if (system.listLatestUpgradablePackages?.length) {
+    //     system.listLatestUpgradablePackages.forEach((pkg) => {
+    //       if (pkg.id === this.id) {
+    //         sumaSystemFound = system;
+    //       }
+    //     });
+    //   }
+    // });
+
+    // if (sumaSystemFound) {
+    //   
+    // }
   }
 
   get sumaPatchActionEnabled() {
+    return true;
+  }
+
+  get __sumaPatchActionEnabled() {
     let sumaSystemFound;
     let actionFound;
-    const sumaSystems = this.store.getters['suma-store/getSumaSystems'];
-    const sumaActionsInProgress = this.store.getters['suma-store/getSumaActionsInProgress'];
+    console.error('SUMA PATCHES');
+    console.error(this);
+
+    const sumaSystems = this.store.getters['suma/getSumaSystems'];
+    const sumaActionsInProgress = this.store.getters['suma/getSumaActionsInProgress'];
 
     sumaSystems.forEach((system) => {
       if (system.listLatestUpgradablePackages?.length) {

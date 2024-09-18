@@ -1,16 +1,18 @@
 suma:
+  label: SUSE Manager
   patch-status-updating: updating
   notification:
     title: Suse Manager is performing the following actions
   cluster-details:
-    patches-col: SUMA patches
+    patches-col: Patches
     table-actions:
-      patch-os: SUMA apply OS patches
-      patch-os-single: SUMA apply OS patch
+      patch-os: Apply OS patches
+      patch-os-single: Apply OS patch
   node-details:
     tabs:
       node: Node
-      patches: SUMA patches
+      patches: Patches
+      server: Server
     cols:
       advisory-name: Name
       advisory-status: Status
@@ -18,3 +20,13 @@ suma:
       advisory-type: Type
       advisory-date: Date
       advisory-update-date: Update Date
+  errors:
+    generic: Unable to communicate with the SUSE Manager UI Extension Proxy
+    proxy: Unable to communicate with the SUSE Manager UI Extension Proxy - please check it is installed and running
+
+typeLabel:
+  susemanager.cattle.io.manager: |-
+    {count, plural,
+      one { SUSE Manager }
+      other { SUSE Managers }
+    }

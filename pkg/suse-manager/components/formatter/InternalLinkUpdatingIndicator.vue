@@ -14,7 +14,7 @@ export default {
     },
 
     urlKey: {
-      type:    String,
+      type:    Function,
       default: null,
     },
 
@@ -39,7 +39,7 @@ export default {
     },
     href() {
       if ( this.urlKey ) {
-        return get(this.row, this.urlKey);
+        return this.urlKey(this.row);
       }
 
       return this.value?.url;
@@ -60,16 +60,17 @@ export default {
 
 <template>
   <div class="link-text-icon">
-    <n-link
-      v-if="href"
-      :to="href"
-    >
-      <span>{{ label }}</span>
-    </n-link>
     <i
       v-if="loading"
       class="loading-indicator icon-spinner"
     />
+    <n-link
+      v-else-if="href"
+      :to="href"
+    >
+      <span>{{ label }}</span>
+    </n-link>
+    <span v-else>?</span>
   </div>
 </template>
 <style lang="scss" scoped>
