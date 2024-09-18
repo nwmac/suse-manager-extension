@@ -13,12 +13,12 @@ entries:
       catalog.cattle.io/ui-component: plugins
     apiVersion: v2
     appVersion: 0.1.0
-    created: "2024-09-18T09:56:06.317074156Z"
+    created: "2024-09-18T12:06:23.647075505Z"
     description: Integrates SUSE Manager into Rancher Cluster Management
-    digest: 12bdc07b3f1276633b819602916a9734b630c9000d0a75a6995b0a2eda56475e
+    digest: 0aa7920f8dc4bba7cec1611b1a43c8e521406b361d6bb5c7d3c3a3276b828a6f
     name: suse-manager
     type: application
     urls:
     - assets/suse-manager/suse-manager-0.1.0.tgz
     version: 0.1.0
-generated: "2024-09-18T09:56:06.316538661Z"
+generated: "2024-09-18T12:06:23.646423837Z"
