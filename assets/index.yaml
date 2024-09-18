@@ -13,12 +13,23 @@ entries:
       catalog.cattle.io/ui-component: plugins
     apiVersion: v2
     appVersion: 0.1.0
-    created: "2024-09-18T12:06:23.647075505Z"
+    created: "2024-09-18T13:10:19.15120592+01:00"
     description: Integrates SUSE Manager into Rancher Cluster Management
-    digest: 0aa7920f8dc4bba7cec1611b1a43c8e521406b361d6bb5c7d3c3a3276b828a6f
+    digest: 12bdc07b3f1276633b819602916a9734b630c9000d0a75a6995b0a2eda56475e
     name: suse-manager
     type: application
     urls:
     - assets/suse-manager/suse-manager-0.1.0.tgz
     version: 0.1.0
-generated: "2024-09-18T12:06:23.646423837Z"
+  suse-manager-proxy:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2024-09-18T13:10:19.15145141+01:00"
+    description: Proxy for the Rancher SUSE Manager UI Extension
+    digest: 02da56d4a715abf28715c09a20b06f57531cf0a604c5bc75e92e10dcfdd84d1b
+    name: suse-manager-proxy
+    type: application
+    urls:
+    - assets/suse-manager-proxy/suse-manager-proxy-0.1.0.tgz
+    version: 0.1.0
+generated: "2024-09-18T13:10:19.150754418+01:00"
