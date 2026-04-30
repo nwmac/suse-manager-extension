@@ -1,10 +1,9 @@
 <script>
 import ResourceTable from '@shell/components/ResourceTable';
 import ResourceFetch from '@shell/mixins/resource-fetch';
-import { CATALOG, SCHEMA } from '@shell/config/types';
+import { CATALOG } from '@shell/config/types';
 import Banner from '@components/Banner/Banner.vue';
 import Masthead from '@shell/components/ResourceList/Masthead';
-import ProxyStatus from '../components/ProxyStatus.vue';
 import { installHelmChart } from '../shared/utils';
 
 // If we add the Helm chart, this is the name we will use
@@ -22,7 +21,6 @@ export default {
   components: {
     Banner,
     Masthead,
-    ProxyStatus,
     ResourceTable,
   },
   mixins:     [ResourceFetch],
@@ -38,11 +36,6 @@ export default {
     // },
   },
   data() {
-    console.error('--------');
-
-    console.error(this.$router);
-    console.error(this.$route);
-
     return {
       haveSchema:   false,
       schema:       undefined,
@@ -55,7 +48,6 @@ export default {
     };
   },
 
-
   async fetch() {
     const inStore = this.$store.getters['currentStore']();
 
@@ -66,13 +58,19 @@ export default {
     this.haveSchema = !!schema;
     this.schema = schema;
 
-    console.error(this.haveSchema);
+    // if (this.haveSchema) {
+    //   this.$router.push({
+    //     path:   `/c/_/manager/${SUMA_SERVER}`,
+    //     params: {
+    //       product:  'manager',
+    //       resource: SUMA_SERVER,
+    //     }
+    //   });
 
-    // If we do not have the schema, we are showing the install page, so do not show the masthead
-    // this.showMasthead = !this.haveSchema;
-    // console.log(this);
-    // console.log(this.schema);
-    // console.log(this.schema);
+    //   return;
+    // }
+
+    console.error(this.haveSchema);
 
     // If we can not see the schema, then the proxy is either not installed or we don't have access
 
@@ -100,40 +98,22 @@ export default {
     }
   },
 
-  // This is a hacky workaround
-  typeDisplay() {
-    const schema = this.$store.getters[`management/schemaFor`](this.resource);
-
-    this.showMasthead = !!schema;
-
-    return 'SUSE Multi-Linux Manager';
-  },
-
   computed: {
-    resourceSchema() {
-      return this.$store.getters[`management/schemaFor`](this.resource);
+    createLocation() {
+      return {
+        name:   'c-cluster-product-resource-create',
+        params: { resource: SUMA_SERVER }
+      };
     },
-
-    allSchemas() {
-      return this.$store.getters[`management/all`](SCHEMA);
+    createAsYamlLocation() {
+      return {
+        name:   'c-cluster-product-resource-create',
+        params: {
+          product: 'manager',
+          resource: SUMA_SERVER }
+      };
     }
-  },
 
-  watch: {
-    allSchemas(neu, old) {
-      const n = neu?.find((s) => s.id === this.resource);
-
-      if ((!this.haveSchema && n) || (this.haveSchema && !n)) {
-        this.$router.replace({
-          name: 'c-cluster-manager-suse-manager',
-          path: '/c/:cluster/manager/suse-manager',
-          params: {
-            product: 'manager',
-            cluster: '_',
-          }
-        });
-      }
-    }
   },
 
   methods: {
@@ -142,6 +122,8 @@ export default {
 
       this.busy = true;
       this.error = '';
+
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Add the Helm repository, if it is not there
       if (!this.haveHelmRepo) {
@@ -179,7 +161,7 @@ export default {
 
         console.error(res);
 
-        // this.busy = false;
+        this.busy = false;
 
         // Got the chart version info for the chart
       } catch (e) {
@@ -197,12 +179,22 @@ export default {
 <template>
   <div>
     <div v-if="haveSchema">
-      <ProxyStatus />
+      SUSE Multi-Linux Manager CRD is available
+
+      <Masthead
+        :schema="schema"
+        :resource="resource"
+        :is-creatable="true"
+        :create-location="createLocation"
+        :yaml-create-location="createAsYamlLocation"
+      ></Masthead>
+<!-- 
       <ResourceTable
+        v-if="haveSchema"
         :loading="loading"
         :schema="schema"
         :rows="rows"
-      />
+      /> -->
   </div>
   <div v-else class="suma-install">
       <div class="suma-panel">

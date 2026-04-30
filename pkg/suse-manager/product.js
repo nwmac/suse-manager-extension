@@ -1,5 +1,6 @@
 import { STATE, NAME as NAME_COL, AGE } from '@shell/config/table-headers';
 
+// We extend the cluster management product
 export const CLUSTER_MGMT = 'manager';
 
 export function init(plugin, store) {
@@ -11,29 +12,31 @@ export function init(plugin, store) {
     virtualType,
   } = plugin.DSL(store, CLUSTER_MGMT);
 
-  // const SUMA_SERVER = 'susemanager.cattle.io.manager';
+  const SUMA_SERVER = 'susemanager.cattle.io.manager';
   const SUSE_MANAGER = 'susemanager';
-
-  // mapGroup('plugins', 'Extensions');
 
   virtualType({
     labelKey:   'suma.label',
-    name:       SUSE_MANAGER,
+    name:       SUMA_SERVER,
     group:      'Root',
     namespaced: false,
     icon:       'globe',
     route:      {
-      name: 'c-cluster-manager-suma',
-      path: '/c/:cluster/manager/suma',
+      name: 'c-cluster-product-resource',
+      path: '/c/:cluster/manager/resource',
+      params: {
+        resource: SUMA_SERVER,
+        product:  'manager'
+      }
     },
     exact:      true
   });
 
   basicType([
-    SUSE_MANAGER,
+    SUMA_SERVER,
   ]);
 
-  weightType(SUSE_MANAGER, -1);
+  weightType(SUMA_SERVER, -1);
 
   // headers(UI_PLUGIN, [
   //   STATE,

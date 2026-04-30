@@ -72,3 +72,6 @@ Thumbs.db
 /dist-pkg
 
 /proxy/src/susemanagerproxy
+
+# Ignore any local kubeconfig files
+/kc-*.yaml

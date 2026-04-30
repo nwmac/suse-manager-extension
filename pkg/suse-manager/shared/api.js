@@ -1,4 +1,5 @@
 import { SERVICE } from '@shell/config/types';
+import { SUMA_SERVER_RESOURCE_NAME } from './definitions';
 
 const NAMESPACE = 'suse-manager';
 const SERVICE_NAME = 'suse-manager-rancher-proxy';
@@ -6,6 +7,11 @@ const SERVICE_NAME = 'suse-manager-rancher-proxy';
 function isError(obj) {
   return obj.type === 'Status';
 }
+
+// Check there is a Service rather than an error status response
+// export async function checkForSumaProxy(store) {
+//   return getProxyService(store)?.kind === 'Service';
+// }
 
 export async function checkForSumaProxy(store) {
   // suse-manager-rancher-proxy
@@ -16,20 +22,64 @@ export async function checkForSumaProxy(store) {
       namespace: NAMESPACE
     });
 
-    return service.kind === 'Service';
+    return service.kind === 'Service';;
   } catch (err) {
     return false;
   }
 }
 
-async function proxyRequest(store, suseManagerLink, url, method = 'get', data) {
-  console.log('>>')
-  console.error(typeof(suseManagerLink));
-  console.log(arguments);
+export async function getProxyService(store) {
+  // suse-manager-rancher-proxy
+  try {
+    const service = await store.dispatch('management/find', {
+      type: SERVICE,
+      id:   `${ NAMESPACE }/${ SERVICE_NAME }`,
+      namespace: NAMESPACE
+    });
 
+    return service;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function getSuseManagerConfig(store, id) {
+  try {
+    const server = id.split('/')[0];
+    const service = await store.dispatch('management/find', {
+      type: SUMA_SERVER_RESOURCE_NAME,
+      id:   `${ NAMESPACE }/${ server }`,
+      namespace: NAMESPACE
+    });
+
+    return service;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function pingProxy(store) {
+  try {
+    const response = await proxyRequest(store, '', '/ping');
+
+    return false;
+  } catch (e) {
+    console.log(e);
+    console.log(e._status);
+
+    return e._status === 403;
+  }
+}
+
+async function proxyRequest(store, suseManagerLink, url, method = 'get', data) {
   const p = suseManagerLink.split('/');
   const baseUrl = '/api/v1/namespaces/suse-manager/services/https:suse-manager-rancher-proxy:5443/proxy/'
   const proxyUrl = `${ baseUrl }rhn/manager/api${ url }`;
+
+  console.log('>>>>>>>>');
+  console.log('Proxy Request ' + url);
+  console.log(suseManagerLink);
+  console.error(p);
 
   const proxy = await store.dispatch(`management/request`, {
     url:     proxyUrl,
@@ -100,15 +150,6 @@ async function __proxyRequest(store, suseManagerLink, url) {
  * @param {object} store - Vue store object
  */
 export async function sumaListAllGroups(store, suseManagerLink) {
-// export async function sumaListAllGroups(store) {
-  // const groups = await store.dispatch(`management/request`, {
-  //   url:             '/rhn/manager/api/systemgroup/listAllGroups',
-  //   responseType:    'application/json',
-  //   withCredentials: true
-  // }, { root: true });
-
-  // return groups.data?.result || [];
-
   const groups = await proxyRequest(store, suseManagerLink, '/systemgroup/listAllGroups');
 
   if (isError(groups)) {
@@ -119,31 +160,30 @@ export async function sumaListAllGroups(store, suseManagerLink) {
 }
 
 export async function sumaGetSystemsInSystemGroup(store, suseManagerID, groupName) {
+    try {
+    const sumaSystems = await sumaListGroupSystems(store, suseManagerID, groupName);
 
-  try {
-  const sumaSystems = await sumaListGroupSystems(store, suseManagerID, groupName);
-
-  if (isError(sumaSystems)) {
-    return sumaSystems;
-  }
-
-  // Get the IP addresses for all of the SUMA Systems
-  const ids = sumaSystems.map((system) => system.id);
-  const networkInfos = await proxyRequest(store, suseManagerID, `/system/getNetworkForSystems?sids=${ ids.join(',') }`);
-  const netData = networkInfos.data?.result || [];
-
-  netData.forEach((data) => {
-    const system = sumaSystems.find((s) => s.id = data.system_id);
-
-    if (system) {
-      system.network = data;
+    if (isError(sumaSystems)) {
+      return sumaSystems;
     }
-  });
 
-  return sumaSystems;
+    // Get the IP addresses for all of the SUMA Systems
+    const ids = sumaSystems.map((system) => system.id);
+    const networkInfos = await proxyRequest(store, suseManagerID, `/system/getNetworkForSystems?sids=${ ids.join(',') }`);
+    const netData = networkInfos.data?.result || [];
 
-} catch (e) {
-  console.error('ERROR');
+    netData.forEach((data) => {
+      const system = sumaSystems.find((s) => s.id = data.system_id);
+
+      if (system) {
+        system.network = data;
+      }
+    });
+
+    return sumaSystems;
+
+  } catch (e) {
+    console.error('ERROR');
 }
 }
 

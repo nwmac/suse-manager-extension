@@ -1,4 +1,4 @@
-import { SystemGroupActions, SystemGroup, SystemGroupLoadingStatus } from "../../shared/types";
+import { SystemGroupActions, SystemGroup, SystemGroupLoadingStatus } from "../../shared/definitions";
 
 const NOTIFICATION_TIMEOUT = 5000;
 

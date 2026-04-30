@@ -1,6 +1,6 @@
 <script>
 import { CAPI, MANAGEMENT } from '@shell/config/types';
-import { checkForSumaProxy } from '../shared/api';
+import { checkForSumaProxy, getSuseManagerConfig } from '../shared/api';
 import { groupPatches, sumaSystemForNode } from '../shared/utils';
 import Banner from '@components/Banner/Banner.vue';
 import SeverityIcon from './SeverityIcon.vue';
@@ -26,7 +26,8 @@ export default {
   data() {
     return {
       suseManager: false,
-      isCluster: true
+      isCluster: true,
+      suseManagerConfig: false,
     };
   },
 
@@ -68,10 +69,11 @@ export default {
       if (cluster) {
         const suseManagerLink = cluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
 
-        console.error(suseManagerLink);
-
         if (suseManagerLink) {
           this.suseManager = suseManagerLink;
+
+          // Fetch the suse manager resource
+          getSuseManagerConfig(this.$store, suseManagerLink).then((s) => this.suseManagerConfig = s);
 
           await this.$store.dispatch('suma/updateClusterMap', {
             clusterId: cluster.status?.clusterName,
@@ -79,8 +81,7 @@ export default {
           });
 
           if (cluster.status?.clusterName) {
-            console.error('Fetching info ...')
-            await this.$store.dispatch('suma/fetchSumaSystemsList', {
+            const systemList = await this.$store.dispatch('suma/fetchSumaSystemsList', {
               store:       this.$store,
               suseManagerLink,
               clusterName: cluster.status?.clusterName,
@@ -96,6 +97,27 @@ export default {
   },
 
   computed: {
+    url() {
+      const base = this.suseManagerConfig?.spec?.url || '';
+
+      console.error('URL');
+      console.error(base);
+
+      if (base && this.suseManager && !this.isCluster) {
+        const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManager);
+        const sumaSystem = sumaSystemForNode(sumaSystems, this.resource);
+
+        console.error(sumaSystem);
+
+        if (sumaSystem) {
+
+          return `${base}/rhn/systems/details/Overview.do?sid=${ sumaSystem.id }`;
+        };
+      }
+
+      return '';
+    },
+
     sumaInfo() {
       if (!this.suseManager) {
         return false;
@@ -160,15 +182,21 @@ export default {
       v-if="sumaInfo"
     >
       <img src="../suma_icon.png"/>
-      <div>
-        <span v-if="isCluster">Machines in this cluster are managed by SUSE Manager</span>
-        <span v-else>The Server for this Node is managed by SUSE Manager</span>
+      <div class="info">
+        <span v-if="isCluster">Machines in this cluster are managed by SUSE Multi-Linux Manager</span>
+        <span v-else>The Server for this Node is managed by SUSE Multi-Linux Manager</span>
         <router-link
           :to="sumaInfo.link"
         >
         {{ sumaInfo.id }}
         </router-link>
         <span class="soft">(System Group: {{ sumaInfo.group }})</span>
+      </div>
+      <div v-if="url" class="open-suma">
+        <a :href="url" target="_blank">
+          SUSE Multi-Linux Manager
+          <i class="icon icon-external-link" />
+        </a>
       </div>
     </div>
     <div
@@ -245,6 +273,14 @@ export default {
 
     .soft {
       opacity: 0.7;
+    }
+
+    .info {
+      flex: 1;
+    }
+
+    .open-suma {
+      align-content: flex-end;
     }
   }
 }

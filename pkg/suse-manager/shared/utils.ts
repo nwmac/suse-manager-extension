@@ -1,7 +1,10 @@
 import { CATALOG as CATALOG_ANNOTATIONS } from '@shell/config/labels-annotations';
 
+// A resource less that 1m30s old is considered new
+const RECENT_TIME_WINDOW = 90;
+
 /**
- * Fiond matching System from SUSE Manager for a node
+ * Find matching System from SUSE Manager for a node
  * @param systems Find
  * @param node 
  */
@@ -100,55 +103,65 @@ export function processError(error: any, t: any) {
  * 
  * Note: This should really be provided via the shell rather than copied here
  */
-// export async function installHelmChart(repo: any, chart: any, version: string = '', values: any = {}) {
+export async function installHelmChart(repo: any, chart: any, values: any = {}) {
+  /*
+    Refer to the developer docs at docs/developer/helm-chart-apps.md
+    for details on what values are injected and where they come from.
+  */
+  // TODO: This is needed in order to support system registry for air-gapped environments
+  // this.addGlobalValuesTo(values);
 
-//     /* Default values defined in the Helm chart itself */
-//     const fromChart = this.versionInfo?.values || {};
+  console.error(chart);
 
-//     const errors = [];
+  const chartInstall = {
+    chartName:   chart.name,
+    version:     chart.version,
+    releaseName: chart.name,
+    description: chart.name,
+    // description: ''.description,
+    annotations: {
+      [CATALOG_ANNOTATIONS.SOURCE_REPO_TYPE]: chart.repoType,
+      [CATALOG_ANNOTATIONS.SOURCE_REPO_NAME]: chart.repoName
+    },
+    values,
+  };
 
-//     /*
-//       Refer to the developer docs at docs/developer/helm-chart-apps.md
-//       for details on what values are injected and where they come from.
-//     */
-//     // TODO: This is needed in order to support system registry for air-gapped environments
-//     // this.addGlobalValuesTo(values);
+  /*
+    Configure Helm CLI options for doing the install or
+    upgrade operation.
+  */
+  const installRequest = {
+    charts:    [chartInstall],
+    noHooks:   false,
+    timeout:   '600s',
+    wait:      true,
+    namespace: 'suse-manager',
+    projectId: '',
+    disableOpenAPIValidation: false,
+    skipCRDs: false,
+  };
 
-//     /*
-//       Migrated annotations are required to allow a deprecated legacy app to be
-//       upgraded.
-//     */
+  // Install the Chart
+  const res = await repo.doAction('install', installRequest);
 
-//     const chartInstall = {
-//       chartName:   chart.chartName,
-//       version:     this.version?.version || this.query.versionName,
-//       releaseName: form.metadata.name,
-//       description: this.customCmdOpts.description,
-//       annotations: {
-//         [CATALOG_ANNOTATIONS.SOURCE_REPO_TYPE]: chart.repoType,
-//         [CATALOG_ANNOTATIONS.SOURCE_REPO_NAME]: chart.repoName
-//       },
-//       values,
-//     };
+  return res;
+}
 
-//     /*
-//       Configure Helm CLI options for doing the install or
-//       upgrade operation.
-//     */
-//     const installRequest = {
-//       charts:    [chartInstall],
-//       noHooks:   false,
-//       timeout:   '600s',
-//       wait:      true,
-//       namespace: 'TODO',
-//       projectId: '',
-//       disableOpenAPIValidation: false,
-//       skipCRDs: false.
-//     };
+// Return if the given resource should be considered 'new', based on the creation timestamp
+export function isNewResource(svc: any) {
+  const created = svc?.metadata?.creationTimestamp;
 
-//     // Install the Chart
-//     const res = await repo.doAction('install', installRequest);
+  if (created) {
+    const dt = Date.parse(created);
 
-//     return res;
-//   }
-// }
+    // If we can't parse the creation string, we don't know if it is new
+    if (isNaN(dt)) {
+      return false;
+    }
+
+    const now = Date.now();
+    const diff = (now - dt) / 1000;
+
+    return diff < RECENT_TIME_WINDOW;
+  }
+}

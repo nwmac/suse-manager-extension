@@ -1,6 +1,5 @@
 import Resource from '@shell/plugins/dashboard-store/resource-class';
 import { sumaScheduleApplyErrata } from '../shared/api';
-import { SUMA_CONFIG } from '../suma-config';
 
 export default class SumaPatches extends Resource {
   get availableActions() {
@@ -87,6 +86,8 @@ export default class SumaPatches extends Resource {
   }
 
   get sumaErrataUrl() {
-    return `${ SUMA_CONFIG.BASE_URL }/rhn/errata/details/Details.do?eid=${ this.id }`;
+    //return `${ SUMA_CONFIG.BASE_URL }/rhn/errata/details/Details.do?eid=${ this.id }`;
+
+    return 'TODO';
   }
 }

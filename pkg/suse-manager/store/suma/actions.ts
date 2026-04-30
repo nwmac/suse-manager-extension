@@ -53,7 +53,10 @@ async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: stri
   });
 
   updatedSumaSystem.listLatestUpgradablePackages = updatedSumaPackages;
-  updatedSumaSystem.clusterGroup = sumaGroup.name;
+
+  // TODO: Need to check this
+  //updatedSumaSystem.clusterGroup = sumaGroup.name;
+  updatedSumaSystem.clusterGroup = sumaGroup;
 
   // get only ongoing system events
   const eventsInProgress = sumaEvents.filter((ev: any) => ev.created_date && !ev.completed_date);
@@ -149,7 +152,8 @@ export default {
   },
 
   async updateSystemEventsList(ctx: any, data: any) {
-    const systemEvents = await sumaListSystemEvents(data.store, data.sid);
+    // TODO: Check this
+    const systemEvents = await sumaListSystemEvents(data.store, data.suseManagerLink,  data.sid);
 
     ctx.commit('updateSystemEventsList', {
       sid: data.sid,
