@@ -49,12 +49,13 @@ export default {
 
   data() {
     return {
-      busy:               false,
-      suseManagerId:      '',
-      systemGroup:        '',
-      suseManagerOptions: [],
-      systemGroupOptions: [],
-      error:              undefined,
+      busy:                false,
+      loadingSystemGroups: false,
+      suseManagerId:       '',
+      systemGroup:         '',
+      suseManagerOptions:  [],
+      systemGroupOptions:  [],
+      error:               undefined,
     };
   },
 
@@ -115,6 +116,7 @@ export default {
       console.log(this.suseManagerId);
 
       // Fetch the system groups for the SUSE Manager Server
+      this.loadingSystemGroups = true;
       try {
         const groups = await sumaListAllGroups(this.$store, this.suseManagerId);
 
@@ -127,6 +129,8 @@ export default {
         });
       } catch (e) {
         this.error = 'Unable to fetch system groups from the SUSE Multi-Linux Manager server';
+      } finally {
+        this.loadingSystemGroups = false;
       }
     }
   }
@@ -162,6 +166,12 @@ export default {
           class="version-selector mt-10"
           data-testid="install-ext-modal-select-version"
         />
+        <Banner
+          v-if="suseManagerId && !error && !loadingSystemGroups && systemGroupOptions.length === 0"
+          color="error"
+        >
+          No system groups are available on the selected SUSE Multi-Linux Manager server.
+        </Banner>
         <Banner
           v-if="error"
           color="error"

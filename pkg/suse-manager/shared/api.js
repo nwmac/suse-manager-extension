@@ -89,7 +89,7 @@ async function proxyRequest(store, suseManagerLink, url, method = 'get', data) {
       'Content-Type': 'application/json',
       'X-Api-Suse-Manager-Target': p[0],
     },
-    responseType: 'application/json',
+    responseType: 'json',
     redirectUnauthorized: false
   }, { root: true });
 

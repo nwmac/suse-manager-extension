@@ -21,8 +21,6 @@ export default {
   mixins: [ CreateEditView ],
 
   async fetch() {
-    console.error('FETCH');
-
     if (this.value.passwordSecret) {
       // Get the password secret
       this.secret = await this.$store.dispatch('management/find', {
@@ -55,6 +53,10 @@ export default {
     saveTest() {
       console.error(this);
       console.error(this.value);
+
+      // Must be created in the MLM namespace
+      this.value.metadata = this.value.metadata || {};
+      this.value.metadata.namespace = SUSE_MANAGER_NAMESPACE;
 
       this.save();
     },
