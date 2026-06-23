@@ -115,7 +115,6 @@ export default function(plugin: IPlugin, args:any) {
     }
   );
 
-
   // add table col on machine pools table under cluster details (number of patches available)
   plugin.addTableColumn(
     TableColumnLocation.RESOURCE,

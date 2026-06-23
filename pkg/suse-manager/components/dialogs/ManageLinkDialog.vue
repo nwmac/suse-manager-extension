@@ -84,7 +84,8 @@ export default {
       this.busy = true;
 
       if (this.resources.length === 1) {
-        const cluster = this.resources[0];
+        // Need to edit the annotation on the provisioning cluster rather than the management cluster
+        const cluster = this.resources[0].provCluster;
 
         cluster.setAnnotation(SUSE_MANAGER_LINK_ANNOTATION, `${ this.suseManagerId }/${ this.systemGroup }`);
 

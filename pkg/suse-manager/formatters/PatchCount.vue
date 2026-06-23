@@ -1,6 +1,6 @@
 <script>
-import { groupPatches, sumaSystemForNode } from '../../shared/utils';
-import SeverityIcon from '../SeverityIcon';
+import { groupPatches, sumaSystemForNode } from '../shared/utils';
+import SeverityIcon from '../components/SeverityIcon.vue';
 
 export default {
   props: {

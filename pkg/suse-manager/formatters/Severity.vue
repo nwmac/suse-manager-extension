@@ -1,5 +1,5 @@
 <script>
-import SeverityIcon from '../SeverityIcon.vue';
+import SeverityIcon from '../components/SeverityIcon.vue';
 
 export default {
   components: { SeverityIcon },
