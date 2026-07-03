@@ -93,9 +93,6 @@ export default {
         const summary = groupPatches(sumaSystem);
         let worst;
 
-        console.error('PATCH SUMMARY');
-        console.error(summary);
-
         if (summary.critical > 0) {
           worst = 'critical'
         } else if (summary.important > 0) {

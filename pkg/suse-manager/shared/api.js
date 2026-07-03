@@ -471,7 +471,8 @@ export async function sumaListSystemEvents(store, suseManagerID, sid) {
 export async function sumaScheduleApplyErrata(store, suseManagerID, sids, errataIds) {
   const data = {
     sids,
-    errataIds
+    errataIds,
+    onlyRelevant: true,
   };
 
   console.error('>>>>>>>>');
@@ -486,6 +487,8 @@ export async function sumaScheduleApplyErrata(store, suseManagerID, sids, errata
   const okay = schedule.status === 200 && schedule.data?.success;
 
   console.error(schedule);
+
+  // Schedule is a list of actionIds, one for each system that was patched. We can use these to track progress of the patching process.
   if (okay) {
 
     // show success notification

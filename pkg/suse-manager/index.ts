@@ -62,7 +62,7 @@ export default function(plugin: IPlugin, args:any) {
   // add hidden panel to retrieve data
   plugin.addPanel(
     PanelLocation.DETAILS_MASTHEAD,
-    { resource: [CAPI.RANCHER_CLUSTER, MANAGEMENT.NODE], mode: ['detail'] },
+    { resource: [CAPI.RANCHER_CLUSTER, MANAGEMENT.NODE, CAPI.MACHINE], mode: ['detail'] },
     { component: () => import('./components/SumaPanel.vue') }
   );
 

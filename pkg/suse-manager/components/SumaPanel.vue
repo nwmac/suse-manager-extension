@@ -27,6 +27,7 @@ export default {
     return {
       suseManager: false,
       isCluster: true,
+      isMachine: false,
       suseManagerConfig: false,
     };
   },
@@ -59,10 +60,36 @@ export default {
         cluster = provCluster;
         node = this.resource;
         this.isCluster = false;
+        this.isMachine = false
+      } else if (this.resource?.type === CAPI.MACHINE) {
+        console.error('Machine');
+
+        const clusterName = this.resource.spec?.clusterName;
+
+        console.error(clusterName);
+
+        // If we have a cluster Name, we need to get the cluster ID for it
+        if (clusterName) {
+          const provCluster = await this.$store.dispatch('management/find', {
+            type: CAPI.RANCHER_CLUSTER,
+            id:   `${ this.resource.metadata.namespace }/${ clusterName }`,
+            opt:  { watch: false }
+          });
+
+          console.error(provCluster);
+
+          //this.suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+
+          cluster = provCluster;
+          node = this.resource;
+          this.isCluster = false;
+          this.isMachine = true;
+        }
       } else {
         cluster = this.resource;
         node = undefined;
         this.isCluster = true;
+        this.isMachine = false;
       }
 
       // this means we are on the cluster details view...
@@ -176,7 +203,7 @@ export default {
 </script>
 
 <template>
-  <div class="suma-panel">
+  <div class="suma-panel" :class="{'border': !!sumaInfo}">
     <div
       class="suma-info"
       v-if="sumaInfo"
@@ -184,7 +211,8 @@ export default {
       <img src="../suma_icon.png"/>
       <div class="info">
         <span v-if="isCluster">Machines in this cluster are managed by SUSE Multi-Linux Manager</span>
-        <span v-else>The Server for this Node is managed by SUSE Multi-Linux Manager</span>
+        <span v-else-if="isMachine">The Server for this machine is managed by SUSE Multi-Linux Manager</span>
+        <span v-else>The Server for this node is managed by SUSE Multi-Linux Manager</span>
         <router-link
           :to="sumaInfo.link"
         >
@@ -239,6 +267,13 @@ export default {
 
 <style lang="scss" scoped>
 .suma-panel {
+  &.border {
+    border: 1px solid var(--border);
+    padding: 10px;
+    margin-top: 20px;
+    border-radius: var(--border-radius);
+  }
+
   .suma-list {
     display: flex;
   }
@@ -262,8 +297,6 @@ export default {
   .suma-info {
     align-items: center;
     display: flex;
-    border-top: 1px solid var(--border);
-    padding-top: 10px;
     //display: none;
 
     > img {
