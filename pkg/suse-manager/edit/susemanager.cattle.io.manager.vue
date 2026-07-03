@@ -4,14 +4,16 @@ import Footer from '@shell/components/form/Footer';
 import NameNsDescription from '@shell/components/form/NameNsDescription';
 import { LabeledInput } from '@components/Form/LabeledInput';
 import Checkbox from '@components/Form/Checkbox/Checkbox.vue';
+import Banner from '@components/Banner/Banner.vue';
 import { SECRET } from '@shell/config/types';
 import { SUSE_MANAGER_NAMESPACE } from '../shared/definitions';
-import { pingProxy, getProxyService } from '../shared/api';
+import { sumaGetVersion } from '../shared/api';
 
 export default {
   name: 'SuseManagerCreate',
 
   components: {
+    Banner,
     Checkbox,
     Footer,
     LabeledInput,
@@ -37,10 +39,13 @@ export default {
     console.log(this.value);
 
     return {
-      errors: undefined,
-      url: '',
-      password: '',
-      secret: undefined,
+      errors:           undefined,
+      url:              '',
+      password:         '',
+      secret:           undefined,
+      testingConnection: false,
+      testVersion:      undefined,
+      testError:        undefined,
     };
   },
 
@@ -62,15 +67,22 @@ export default {
     },
 
     async testConnection() {
-      console.error('TEST CONNECTION');
-      // Check to see if the service is available
-      const service = await getProxyService(this.$store);
+      this.testingConnection = true;
+      this.testVersion = undefined;
+      this.testError = undefined;
 
-      if (service) {
-        // Service is there, now check that we can ping it
-        const ping = await pingProxy(this.$store);
+      try {
+        const version = await sumaGetVersion(this.$store, this.value.metadata.name);
 
-        console.error(ping);
+        if (version) {
+          this.testVersion = version;
+        } else {
+          this.testError = 'Connected to the proxy but did not receive a version from SUSE Multi-Linux Manager.';
+        }
+      } catch (e) {
+        this.testError = e?.message || e?._statusText || 'Unable to connect to SUSE Multi-Linux Manager.';
+      } finally {
+        this.testingConnection = false;
       }
     },
 
@@ -160,8 +172,29 @@ export default {
 
       <div
         v-if="mode == 'view'"
+        class="test-connection"
       >
-        <button class="mt-20 btn role-primary" @click.prevent="testConnection">Test Connection</button>
+        <button
+          class="mt-20 btn role-primary"
+          :disabled="testingConnection"
+          @click.prevent="testConnection"
+        >
+          {{ testingConnection ? 'Testing…' : 'Test Connection' }}
+        </button>
+        <Banner
+          v-if="testVersion"
+          color="success"
+          class="mt-10"
+        >
+          Connected to SUSE Multi-Linux Manager (API version {{ testVersion }}).
+        </Banner>
+        <Banner
+          v-if="testError"
+          color="error"
+          class="mt-10"
+        >
+          {{ testError }}
+        </Banner>
       </div>
 
       <Footer

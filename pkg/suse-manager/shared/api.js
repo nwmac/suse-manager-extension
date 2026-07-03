@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import { SERVICE } from '@shell/config/types';
 import { SUMA_SERVER_RESOURCE_NAME } from './definitions';
 
@@ -43,10 +44,11 @@ export async function getProxyService(store) {
   }
 }
 
-export async function getSuseManagerConfig(store, id) {
+export async function getSuseManagerConfig(storeOrDispatch, id) {
   try {
+    const dispatch = storeOrDispatch.dispatch ? storeOrDispatch.dispatch : storeOrDispatch;
     const server = id.split('/')[0];
-    const service = await store.dispatch('management/find', {
+    const service = await dispatch('management/find', {
       type: SUMA_SERVER_RESOURCE_NAME,
       id:   `${ NAMESPACE }/${ server }`,
       namespace: NAMESPACE
@@ -54,6 +56,7 @@ export async function getSuseManagerConfig(store, id) {
 
     return service;
   } catch (err) {
+    console.error('getSuseManagerConfig error', err);
     return false;
   }
 }
@@ -146,6 +149,53 @@ async function __proxyRequest(store, suseManagerLink, url) {
 // }
 
 /**
+ * SUMA api.getVersion - returns the MLM API version string.
+ * Used by "Test Connection" to verify the proxy can reach MLM, log in
+ * with the configured credentials, and get a valid response back.
+ * @param {object} store - Vue store object
+ * @param {string} suseManagerID - SUSE Manager resource name
+ */
+export async function sumaGetVersion(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/api/getVersion');
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to reach SUSE Multi-Linux Manager');
+  }
+
+  return response.data?.result;
+}
+
+/**
+ * SUMA api.systemVersion - returns the MLM server version string.
+ * @param {object} store - Vue store object
+ * @param {string} suseManagerID - SUSE Manager resource name
+ */
+export async function sumaGetSystemVersion(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/api/systemVersion');
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to reach SUSE Multi-Linux Manager');
+  }
+
+  return response.data?.result;
+}
+
+/**
+ * SUMA system.listSystems - returns all systems visible to the configured user.
+ * @param {object} store - Vue store object
+ * @param {string} suseManagerID - SUSE Manager resource name
+ */
+export async function sumaListSystems(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/system/listSystems');
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to reach SUSE Multi-Linux Manager');
+  }
+
+  return response.data?.result || [];
+}
+
+/**
  * SUMA list all systemgroups
  * @param {object} store - Vue store object
  */
@@ -161,30 +211,221 @@ export async function sumaListAllGroups(store, suseManagerLink) {
 
 export async function sumaGetSystemsInSystemGroup(store, suseManagerID, groupName) {
     try {
-    const sumaSystems = await sumaListGroupSystems(store, suseManagerID, groupName);
+      const sumaSystems = await sumaListGroupSystems(store, suseManagerID, groupName);
 
-    if (isError(sumaSystems)) {
-      return sumaSystems;
-    }
+      console.error('sumaGetSystemsInSystemGroup', sumaSystems);
 
-    // Get the IP addresses for all of the SUMA Systems
-    const ids = sumaSystems.map((system) => system.id);
-    const networkInfos = await proxyRequest(store, suseManagerID, `/system/getNetworkForSystems?sids=${ ids.join(',') }`);
-    const netData = networkInfos.data?.result || [];
-
-    netData.forEach((data) => {
-      const system = sumaSystems.find((s) => s.id = data.system_id);
-
-      if (system) {
-        system.network = data;
+      if (isError(sumaSystems)) {
+        return sumaSystems;
       }
-    });
 
-    return sumaSystems;
+      // Get the IP addresses for all of the SUMA Systems
+      const ids = sumaSystems.map((system) => system.id);
+      const networkInfos = await proxyRequest(store, suseManagerID, `/system/getNetworkForSystems?sids=${ ids.join(',') }`);
+      const netData = networkInfos.data?.result || [];
 
-  } catch (e) {
-    console.error('ERROR');
+      console.log(netData);
+
+      netData.forEach((data) => {
+        const system = sumaSystems.find((s) => s.id = data.system_id);
+
+        if (system) {
+          system.network = data;
+        }
+      });
+
+      return sumaSystems;
+
+    } catch (e) {
+      console.error('ERROR');
+  }
 }
+
+/**
+ * Fetch a CAPI machine's SSH bundle from Rancher and extract the SSH
+ * connection info Rancher uses for the machine.
+ *
+ * Rancher exposes a `sshkeys` link on `cluster.x-k8s.io.machine` resources
+ * provisioned via an rke-machine.cattle.io infrastructure ref. The link
+ * returns a ZIP containing `<machineName>/id_rsa`, `<machineName>/id_rsa.pub`
+ * and `<machineName>/config.json` (the latter holding IPAddress, IPv6Address,
+ * SSHUser, SSHPort, MachineName). See rancher/rancher pkg/api/steve/machine.
+ *
+ * Returns `{ user, port, host, privateKey }` or throws if the link is missing
+ * or the bundle is malformed.
+ */
+export async function fetchMachineSshConfig(machine) {
+  const url = machine?.links?.sshkeys;
+
+  console.log('[suma] fetchMachineSshConfig: machine=%s, sshkeys URL=%s', machine?.id, url);
+
+  if (!url) {
+    throw new Error('Machine has no sshkeys link (not provisioned via a Rancher node driver?)');
+  }
+
+  const res = await fetch(url, { credentials: 'include' });
+
+  console.log('[suma] fetchMachineSshConfig: response status=%d %s', res.status, res.statusText);
+
+  if (!res.ok) {
+    throw new Error(`Failed to download SSH keys: ${ res.status } ${ res.statusText }`);
+  }
+
+  const zipData = await res.arrayBuffer();
+
+  console.log('[suma] fetchMachineSshConfig: downloaded %d bytes', zipData.byteLength);
+
+  const zip = await JSZip.loadAsync(zipData);
+
+  const allEntries = [];
+  let configEntry;
+  let keyEntry;
+  let pubKeyEntry;
+
+  zip.forEach((path, entry) => {
+    allEntries.push(path);
+
+    const base = path.split('/').pop();
+
+    if (base === 'config.json') {
+      configEntry = entry;
+    } else if (base === 'id_rsa') {
+      keyEntry = entry;
+    } else if (base === 'id_rsa.pub') {
+      pubKeyEntry = entry;
+    }
+  });
+
+  console.log('[suma] fetchMachineSshConfig: zip contents:', allEntries);
+
+  if (!keyEntry) {
+    throw new Error('SSH key bundle is missing id_rsa');
+  }
+  if (!configEntry) {
+    throw new Error('SSH key bundle is missing config.json');
+  }
+
+  const [configText, privateKey, publicKey] = await Promise.all([
+    configEntry.async('string'),
+    keyEntry.async('string'),
+    pubKeyEntry ? pubKeyEntry.async('string') : Promise.resolve(undefined),
+  ]);
+
+  console.log('[suma] fetchMachineSshConfig: config.json raw=', configText);
+
+  const cfg = JSON.parse(configText);
+
+  console.log('[suma] fetchMachineSshConfig: parsed config:', cfg);
+  console.log('[suma] fetchMachineSshConfig: id_rsa.pub:', publicKey);
+  console.log('[suma] fetchMachineSshConfig: id_rsa (private key, %d chars):\n%s', privateKey.length, privateKey);
+
+  const result = {
+    user:       cfg.SSHUser,
+    port:       cfg.SSHPort || 22,
+    host:       cfg.IPAddress,
+    ipv6:       cfg.IPv6Address,
+    name:       cfg.MachineName,
+    privateKey,
+  };
+
+  console.log('[suma] fetchMachineSshConfig: returning:', { ...result, privateKey: `<${ privateKey.length } chars>` });
+
+  return result;
+}
+
+/**
+ * SUMA activationkey.listActivationKeys
+ */
+export async function sumaListActivationKeys(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/activationkey/listActivationKeys');
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to list activation keys');
+  }
+
+  return response.data?.result || [];
+}
+
+/**
+ * SUMA system.bootstrap / system.bootstrapWithPrivateSshKey
+ * Pass either sshPassword OR sshPrivKey (with optional sshPrivKeyPass).
+ */
+export async function sumaBootstrapSystem(store, suseManagerID, params) {
+  const usePrivateKey = !!params.sshPrivKey;
+  const endpoint = usePrivateKey ? '/system/bootstrapWithPrivateSshKey' : '/system/bootstrap';
+
+  const body = {
+    host:            params.host,
+    sshPort:         params.sshPort ?? 22,
+    sshUser:         params.sshUser,
+    activationKey:   params.activationKey,
+    reactivationKey: params.reactivationKey ?? '',
+    saltSSH:         !!params.saltSSH,
+  };
+
+  if (typeof params.proxyId === 'number') {
+    body.proxyId = params.proxyId;
+  }
+
+  if (usePrivateKey) {
+    body.sshPrivKey = params.sshPrivKey;
+    body.sshPrivKeyPass = params.sshPrivKeyPass ?? '';
+  } else {
+    body.sshPassword = params.sshPassword ?? '';
+  }
+
+  const safeBody = { ...body };
+
+  if (safeBody.sshPrivKey) {
+    safeBody.sshPrivKey = `<${ safeBody.sshPrivKey.length } chars>`;
+  }
+  if (safeBody.sshPassword) {
+    safeBody.sshPassword = `<${ safeBody.sshPassword.length } chars>`;
+  }
+  if (safeBody.sshPrivKeyPass) {
+    safeBody.sshPrivKeyPass = `<${ safeBody.sshPrivKeyPass.length } chars>`;
+  }
+
+  console.log('[suma] sumaBootstrapSystem: suseManagerID=%s endpoint=%s', suseManagerID, endpoint);
+  console.log('[suma] sumaBootstrapSystem: request body:', safeBody);
+
+  const response = await proxyRequest(store, suseManagerID, endpoint, 'post', body);
+
+  console.log('[suma] sumaBootstrapSystem: response status=%d data=', response?.status, response?.data);
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Bootstrap failed');
+  }
+
+  // SUMA returns 1 on success, but also bubble up any error message in the body
+  if (response.data && response.data.success === false) {
+    throw new Error(response.data.message || 'Bootstrap failed');
+  }
+
+  return response.data?.result;
+}
+
+/**
+ * SUMA systemgroup.addOrRemoveSystems - add (or remove) systems to a group.
+ */
+export async function sumaAddOrRemoveSystemsInGroup(store, suseManagerID, systemGroupName, serverIds, add = true) {
+  const body = {
+    systemGroupName,
+    serverIds,
+    add,
+  };
+
+  const response = await proxyRequest(store, suseManagerID, '/systemgroup/addOrRemoveSystems', 'post', body);
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to update system group membership');
+  }
+
+  if (response.data && response.data.success === false) {
+    throw new Error(response.data.message || 'Unable to update system group membership');
+  }
+
+  return response.data?.result;
 }
 
 /**

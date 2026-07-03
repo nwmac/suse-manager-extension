@@ -110,7 +110,7 @@ export default {
     });
 
     try {
-      // get SUMA info for a group of systems in a cluster (GROUP NAME in SUMA must match CLUSTER NAME in Rancher!!!)
+      // get MLM info for a group of systems in a cluster (GROUP NAME in SUMA must match CLUSTER NAME in Rancher!!!)
       if (groupName) {
         if (sumaGroupFound && sumaGroupFound['system_count']) {
           sumaSystems = await sumaGetSystemsInSystemGroup(data.store, sumaInstance, sumaGroupFound.name);

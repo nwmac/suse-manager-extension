@@ -1,6 +1,7 @@
 <script>
 import { groupPatches, sumaSystemForNode } from '../shared/utils';
 import SeverityIcon from '../components/SeverityIcon.vue';
+import { MANAGEMENT, CAPI } from '@shell/config/types';
 
 export default {
   props: {
@@ -30,6 +31,32 @@ export default {
     },
   },
 
+  async fetch() {
+    let clusterID = this.row.mgmtClusterId;
+
+    // If we have a cluster Name, we need to get the cluster ID for it
+    if (!clusterID && this.row.spec?.clusterName) {
+      const provCluster = await this.$store.dispatch('management/find', {
+        type: CAPI.RANCHER_CLUSTER,
+        id:   `fleet-default/${ this.row.spec.clusterName }`,
+        opt:  { watch: false }
+      });
+
+      if (provCluster) {
+        console.error(provCluster.mgmt);
+        clusterID = provCluster.mgmt?.id;
+      }
+    }
+
+    this.clusterID = clusterID;
+  },
+
+  data() {
+    return {
+      clusterID: null,
+    };
+  },
+
   components: {
     SeverityIcon,
   },
@@ -53,18 +80,21 @@ export default {
     },
 
     info() {
-      if (this.row.mgmtClusterId) {
-        const sumaInstanceId = this.$store.getters['suma/getSumaInstanceForCluster'](this.row.mgmtClusterId);
+      if (this.clusterID) {
+        const sumaInstanceId = this.$store.getters['suma/getSumaInstanceForCluster'](this.clusterID);
         const sumaSystems = this.$store.getters['suma/getSystemGroup'](sumaInstanceId);
         const sumaSystem = sumaSystemForNode(sumaSystems, this.row);
 
-        if (!sumaSystem?.listLatestUpgradablePackages) {
+        if (!Array.isArray(sumaSystem?.listLatestUpgradablePackages)) {
           return {};
         }
 
         const total = `${ sumaSystem.listLatestUpgradablePackages.length }`;
         const summary = groupPatches(sumaSystem);
         let worst;
+
+        console.error('PATCH SUMMARY');
+        console.error(summary);
 
         if (summary.critical > 0) {
           worst = 'critical'
@@ -80,6 +110,7 @@ export default {
 
         return {
           total,
+          hasTotal: true,
           worst
         }
       }
@@ -99,7 +130,7 @@ export default {
     <router-link
       :to="href"
     >
-      <span v-if="info.total">{{ info.total }}</span>
+      <span v-if="info.hasTotal">{{ info.total }}</span>
       <span v-else>--</span>
     </router-link>
   </div>

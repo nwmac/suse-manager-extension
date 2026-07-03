@@ -9,12 +9,22 @@ const RECENT_TIME_WINDOW = 90;
  * @param node 
  */
 export function sumaSystemForNode(systems: any[], node: any) {
-  if (!systems || !node?.internalIp) {
+  let nodeIP = node?.internalIp;
+
+  if (!nodeIP && node?.status?.addresses) {
+    nodeIP = node?.status?.addresses.find((a: any) => a.type === 'InternalIP')?.address;
+  }
+
+  if (!systems || !nodeIP) {
     return undefined;
   }
 
+  const found = systems.find((system) => {
+    return system.network?.ip === nodeIP;
+  });
+
   return systems.find((system) => {
-    return system.network?.ip === node.internalIp;
+    return system.network?.ip === nodeIP;
   });
 }
 
@@ -33,6 +43,11 @@ const SEVERITY_SORT: { [key: string]: number } = {
   'low': 4,
   'bug': 5,
 };
+
+const SEVERITYSORT: { [sort: number]: string } = {
+  100: 'critical',
+};
+
 
 export function processPatch(patch: any) {
   // Process the patch object
@@ -57,6 +72,7 @@ export function processPatch(patch: any) {
   patch.severitySort = SEVERITY_SORT[patch.severity] || 100;
 }
 
+
 export function groupPatches(server: any) {
   const summary: { [key: string]: number }= {
     total: 0,
@@ -69,11 +85,16 @@ export function groupPatches(server: any) {
     unknown: 0,
   };
 
+  // severitySort
+  console.error('groupPatches');
+  console.error(server);
+
   if (server?.listLatestUpgradablePackages) {
     summary.total = server.listLatestUpgradablePackages.length;
 
     server.listLatestUpgradablePackages.forEach((patch: any) => {
-      const sev = patch.severity || 'unknown';
+      const sev = patch.severity || SEVERITYSORT[patch.severitySort] || 'unknown';
+
       if (summary[sev] !== undefined) {
         summary[sev] = summary[sev] + 1;
       }

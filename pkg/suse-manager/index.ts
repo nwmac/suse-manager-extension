@@ -38,6 +38,7 @@ export default function(plugin: IPlugin, args:any) {
 
   plugin.register('dialog', 'SuseManagerManageLinkDialog', () => import('./components/dialogs/ManageLinkDialog.vue'));
   plugin.register('dialog', 'SuseManagerRemoveLinkDialog', () => import('./components/dialogs/RemoveLinkDialog.vue'));
+  plugin.register('dialog', 'SuseManagerRegisterNodesDialog', () => import('./components/dialogs/RegisterNodesDialog.vue'));
 
   // Add a route
   plugin.addRoute({
@@ -110,7 +111,30 @@ export default function(plugin: IPlugin, args:any) {
             component:  'SuseManagerRemoveLinkDialog',
             modalWidth: '450px'
           });
-        }        
+        }
+      }
+    }
+  );
+
+  // Register cluster nodes with SUSE Manager (only when the cluster is linked)
+  plugin.addAction(
+    ActionLocation.TABLE,
+    { resource: ['provisioning.cattle.io.cluster'] },
+    {
+      label: 'Register Nodes with SUSE Multi-Linux Manager',
+      enabled(ctx: any) {
+        return ctx.kind === 'Cluster' && !!ctx?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+      },
+      invoke(opts: ActionOpts, values: any[]) {
+        if (values.length === 1) {
+          const resource = values[0];
+
+          resource.$dispatch('promptModal', {
+            resources:  values,
+            component:  'SuseManagerRegisterNodesDialog',
+            modalWidth: '850px'
+          });
+        }
       }
     }
   );
@@ -119,7 +143,7 @@ export default function(plugin: IPlugin, args:any) {
   plugin.addTableColumn(
     TableColumnLocation.RESOURCE,
     {
-      resource: [CAPI.RANCHER_CLUSTER], mode: ['detail'], hash: ['node-pools']
+      resource: [CAPI.RANCHER_CLUSTER], mode: ['detail'], hash: ['machine-pools']
     },
     {
       name:          'suma-patches',
@@ -148,7 +172,7 @@ export default function(plugin: IPlugin, args:any) {
   plugin.addAction(
     ActionLocation.TABLE,
     {
-      resource: [CAPI.RANCHER_CLUSTER], mode: ['detail'], hash: ['node-pools']
+      resource: [CAPI.RANCHER_CLUSTER], mode: ['detail'], hash: ['machine-pools']
     },
     {
       labelKey: 'suma.cluster-details.table-actions.patch-os',
@@ -163,7 +187,7 @@ export default function(plugin: IPlugin, args:any) {
         // }
 
         // return !!sumaSystemFound;
-        console.error(ctx);
+        // console.error(ctx);
         return false;
       },
       invoke(opts: ActionOpts, values: any[]) {

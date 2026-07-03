@@ -174,8 +174,9 @@ func sumaProxy(url string, req *http.Request, w http.ResponseWriter, cacheKey st
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
+	// system.bootstrap can take 30s+ to complete - login uses its own 10s client below.
 	client := http.Client{
-		Timeout:   time.Second * 10,
+		Timeout:   time.Second * 120,
 		Transport: tr,
 	}
 

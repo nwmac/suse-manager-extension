@@ -1,5 +1,6 @@
 import Resource from '@shell/plugins/dashboard-store/resource-class';
-import { sumaScheduleApplyErrata } from '../shared/api';
+import { sumaScheduleApplyErrata, getSuseManagerConfig } from '../shared/api';
+import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 
 export default class SumaPatches extends Resource {
   get availableActions() {
@@ -13,10 +14,19 @@ export default class SumaPatches extends Resource {
     return [applyPatchAction];
   }
 
-  applySinglePatch() {
+  async applySinglePatch() {
     let sumaSystemFound;
 
     console.error(this);
+    console.error(this.suma?.suseManagerId);
+
+    const id = `${ SUSE_MANAGER_NAMESPACE }/${ this.suma?.suseManagerId }`;
+
+    const mlmInstance = this.$rootGetters['management/byId'](SUMA_SERVER_RESOURCE_NAME, id);
+
+    console.error(mlmInstance);
+
+    return;
 
     if (this.suma) {
       console.error('applySinglePatch');
@@ -85,9 +95,18 @@ export default class SumaPatches extends Resource {
     return this.advisory_status;
   }
 
-  get sumaErrataUrl() {
-    //return `${ SUMA_CONFIG.BASE_URL }/rhn/errata/details/Details.do?eid=${ this.id }`;
+  get sumaURL() {
+    const id = `${ SUSE_MANAGER_NAMESPACE }/${ this.suma?.suseManagerId }`;
+    const mlmInstance = this.$rootGetters['management/byId'](SUMA_SERVER_RESOURCE_NAME, id);
 
-    return 'TODO';
+    if (mlmInstance) {
+      return mlmInstance.spec.url;
+    }
+
+    return undefined;
+  }
+
+  get sumaErrataUrl() {
+    return `${ this.sumaURL }/rhn/errata/details/Details.do?eid=${ this.id }`;
   }
 }
