@@ -1,15 +1,15 @@
-persistentVolume:
-  enabled: false
-securityContext:
-  capabilities:
-    add:
-    - SYS_PTRACE
-image: okteto/golang:1
-name: suse-manager-rancher-proxy
-namespace: suse-manager
-command: bash
-forward:
-- 2345:2345
-- 8080:8080
-sync:
-- .:/usr/src/app
+dev:
+  suse-manager-rancher-proxy:
+    persistentVolume:
+      enabled: false
+    securityContext:
+      capabilities:
+        add:
+        - SYS_PTRACE
+    image: okteto/golang:1
+    command: bash
+    forward:
+    - 2345:2345
+    - 8080:8080
+    sync:
+    - .:/usr/src/app
