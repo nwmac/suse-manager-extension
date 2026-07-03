@@ -5,23 +5,50 @@ import {
   sumaGetSystemsInSystemGroup,
   sumaListSystemEvents,
   sumaListLatestUpgradablePackages,
+  sumaGetSystemDetails,
+  sumaGetRunningKernel,
+  sumaGetInstalledProducts,
+  sumaGetRegistrationDate,
+  sumaGetSubscribedBaseChannel,
+  sumaListSubscribedChildChannels,
+  sumaListSystemsRequiringReboot,
 } from '../../shared/api';
 import SumaPatches from '../../models/crd.sumapatches';
 
 import { processError, processPatch, sumaSystemForNode } from '../../shared/utils';
 
 async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: string, sumaGroup: string, sumaSystem: any, fetchSumaEvents = true) {
-  const reqs: any = { sumaPackages: await sumaListLatestUpgradablePackages(store, suseManagerId, sumaSystem?.id) };
+  const sid = sumaSystem?.id;
+
+  const reqs: any = {
+    sumaPackages:       sumaListLatestUpgradablePackages(store, suseManagerId, sid),
+    sumaDetails:        sumaGetSystemDetails(store, suseManagerId, sid).catch(() => undefined),
+    sumaKernel:         sumaGetRunningKernel(store, suseManagerId, sid).catch(() => undefined),
+    sumaProducts:       sumaGetInstalledProducts(store, suseManagerId, sid).catch(() => []),
+    sumaRegistered:     sumaGetRegistrationDate(store, suseManagerId, sid).catch(() => undefined),
+    sumaBaseChannel:    sumaGetSubscribedBaseChannel(store, suseManagerId, sid).catch(() => undefined),
+    sumaChildChannels:  sumaListSubscribedChildChannels(store, suseManagerId, sid).catch(() => []),
+    sumaRebootList:     sumaListSystemsRequiringReboot(store, suseManagerId).catch(() => []),
+  };
 
   if (fetchSumaEvents) {
-    reqs.sumaEvents = await sumaListSystemEvents(store, suseManagerId, sumaSystem?.id);
+    reqs.sumaEvents = sumaListSystemEvents(store, suseManagerId, sid);
   }
 
   const res: any = await allHash(reqs);
 
   const sumaPackages = res.sumaPackages;
   const sumaEvents = res.sumaEvents || [];
-  const updatedSumaSystem = { ...sumaSystem };
+  const updatedSumaSystem = {
+    ...sumaSystem,
+    ...(res.sumaDetails || {}),
+    kernel:            res.sumaKernel,
+    installedProducts: res.sumaProducts || [],
+    registered:        res.sumaRegistered,
+    baseChannel:       res.sumaBaseChannel,
+    childChannels:     res.sumaChildChannels || [],
+    reboot_required:   (res.sumaRebootList || []).some((s: any) => s.id === sid),
+  };
 
   // update packages (patches) payload with complimentary data needed for classify
   const updatedSumaPackages = sumaPackages.map((pkg: any) => {

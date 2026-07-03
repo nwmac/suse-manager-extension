@@ -451,6 +451,69 @@ export async function sumaListLatestUpgradablePackages(store, suseManagerID, sid
 }
 
 /**
+ * SUMA system.getDetails - returns extended system detail struct
+ */
+export async function sumaGetSystemDetails(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/getDetails?sid=${ sid }`);
+
+  return response.data?.result || undefined;
+}
+
+/**
+ * SUMA system.getRunningKernel - returns the kernel version currently running
+ */
+export async function sumaGetRunningKernel(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/getRunningKernel?sid=${ sid }`);
+
+  return response.data?.result || undefined;
+}
+
+/**
+ * SUMA system.getInstalledProducts - list of products installed on the system
+ */
+export async function sumaGetInstalledProducts(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/getInstalledProducts?sid=${ sid }`);
+
+  return response.data?.result || [];
+}
+
+/**
+ * SUMA system.getRegistrationDate - date the system was registered
+ */
+export async function sumaGetRegistrationDate(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/getRegistrationDate?sid=${ sid }`);
+
+  return response.data?.result || undefined;
+}
+
+/**
+ * SUMA system.getSubscribedBaseChannel - base channel the system is subscribed to
+ */
+export async function sumaGetSubscribedBaseChannel(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/getSubscribedBaseChannel?sid=${ sid }`);
+
+  return response.data?.result || undefined;
+}
+
+/**
+ * SUMA system.listSubscribedChildChannels - child channels the system is subscribed to
+ */
+export async function sumaListSubscribedChildChannels(store, suseManagerID, sid) {
+  const response = await proxyRequest(store, suseManagerID, `/system/listSubscribedChildChannels?sid=${ sid }`);
+
+  return response.data?.result || [];
+}
+
+/**
+ * SUMA system.listSuggestedReboot - list of systems that suggest a reboot
+ */
+export async function sumaListSystemsRequiringReboot(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/system/listSuggestedReboot');
+
+  return response.data?.result || [];
+}
+
+/**
  * SUMA list of all event regarding a given system
  * @param {object} store - Vue store object
  * @param {string, int} sid - system id
