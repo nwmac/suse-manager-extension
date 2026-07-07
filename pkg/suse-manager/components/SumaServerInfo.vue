@@ -1,5 +1,6 @@
 <script>
 import { groupPatches } from '../shared/utils';
+import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 import Banner from '@components/Banner/Banner.vue';
 
 export default {
@@ -39,6 +40,44 @@ export default {
 
     rebootRequired() {
       return !!this.system?.reboot_required;
+    },
+
+    /**
+     * MLM base URL for this system, taken from the SumaServer resource we
+     * loaded via SumaPanel's fetch. Used to build deep-links into the MLM UI.
+     */
+    mlmBaseUrl() {
+      const id = this.system?.suseManagerId;
+
+      if (!id) {
+        return '';
+      }
+
+      const server = this.$store.getters['management/byId'](SUMA_SERVER_RESOURCE_NAME, `${ SUSE_MANAGER_NAMESPACE }/${ id }`);
+
+      return server?.spec?.url || '';
+    },
+
+    /**
+     * Deep-link to this system's errata (patch) list in the MLM UI.
+     */
+    errataListUrl() {
+      if (!this.mlmBaseUrl || !this.system?.id) {
+        return '';
+      }
+
+      return `${ this.mlmBaseUrl }/rhn/systems/details/ErrataList.do?sid=${ this.system.id }`;
+    },
+
+    /**
+     * Deep-link to this system's upgradable packages list in the MLM UI.
+     */
+    upgradablePackagesUrl() {
+      if (!this.mlmBaseUrl || !this.system?.id) {
+        return '';
+      }
+
+      return `${ this.mlmBaseUrl }/rhn/systems/details/packages/UpgradableList.do?sid=${ this.system.id }`;
     },
 
     baseChannelLabel() {
@@ -134,6 +173,22 @@ export default {
   },
 
   methods: {
+    openRebootDialog() {
+      if (!this.system?.suseManagerId || !this.system?.id) {
+        return;
+      }
+
+      this.$store.dispatch('cluster/promptModal', {
+        componentProps: {
+          sid:           this.system.id,
+          suseManagerId: this.system.suseManagerId,
+          systemName:    this.system.profile_name || this.system.hostname || '',
+        },
+        component:  'SuseManagerRebootDialog',
+        modalWidth: '450px',
+      });
+    },
+
     formatDate(value) {
       if (!value) {
         return null;
@@ -172,13 +227,27 @@ export default {
           <div class="status-line" v-if="totalPatches > 0 || rebootRequired">
             <template v-if="totalPatches > 0">
               <span class="label">Software Updates Available</span>
-              <a class="stat" v-if="criticalPatches > 0">Critical: {{ criticalPatches }}</a>
-              <a class="stat">Packages: {{ totalPatches }}</a>
+              <a
+                v-if="criticalPatches > 0"
+                class="stat"
+                :href="errataListUrl || undefined"
+                :target="errataListUrl ? '_blank' : undefined"
+              >Critical: {{ criticalPatches }}</a>
+              <a
+                class="stat"
+                :href="upgradablePackagesUrl || undefined"
+                :target="upgradablePackagesUrl ? '_blank' : undefined"
+              >Packages: {{ totalPatches }}</a>
             </template>
-            <span v-if="rebootRequired" class="reboot-note">
+            <a
+              v-if="rebootRequired"
+              class="reboot-note"
+              role="button"
+              @click.prevent="openRebootDialog"
+            >
               <i class="icon icon-refresh status-icon" />
               The system requires a reboot
-            </span>
+            </a>
           </div>
           <div class="status-line" v-if="totalPatches === 0 && !rebootRequired">
             <i class="icon icon-checkmark status-icon ok" />
@@ -381,8 +450,12 @@ export default {
 
     .stat {
       color: var(--link);
-      cursor: default;
+      cursor: pointer;
       margin-right: 12px;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
 
     .reboot-note {
@@ -390,6 +463,12 @@ export default {
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      color: var(--link);
+      cursor: pointer;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 

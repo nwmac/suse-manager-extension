@@ -107,6 +107,25 @@ export function groupPatches(server: any) {
   return summary;
 }
 
+/**
+ * SUMA action names for combined patch updates always include an
+ * "(and N more patches)" suffix — even when N is 0. Strip the noise-only case.
+ */
+export function stripEmptyMoreSuffix(name: string): string {
+  return (name || '').replace(/\s*\(and 0 more patches\)\s*$/, '');
+}
+
+/**
+ * Format a SUMA action / event into the single-line "- action_type on
+ * profile_name => name" display we use across the notification panel and
+ * completion summaries.
+ */
+export function formatActionLine(action: any): string {
+  const name = stripEmptyMoreSuffix(action?.name || '');
+
+  return `- ${ action?.action_type } on ${ action?.profile_name } => ${ name }`;
+}
+
 export function processError(error: any, t: any) {
   console.error('processError');
   console.error(error);

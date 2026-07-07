@@ -151,10 +151,14 @@ export default {
       }
 
       const p = this.suseManager.split('/');
+      const base = this.suseManagerConfig?.spec?.url || '';
+      const groupId = this.$store.getters['suma/getSystemGroupId'](this.suseManager);
+      const groupUrl = base && groupId !== undefined ? `${ base }/rhn/groups/GroupDetail.do?sgid=${ groupId }` : '';
 
       return {
         id:    p[0],
         group: p[1],
+        groupUrl,
         link:  {
           name:   'c-cluster-product-resource-namespace-id',
           params: {
@@ -218,7 +222,15 @@ export default {
         >
         {{ sumaInfo.id }}
         </router-link>
-        <span class="soft">(System Group: {{ sumaInfo.group }})</span>
+        <span class="soft">
+          (System Group:
+          <a
+            v-if="sumaInfo.groupUrl"
+            :href="sumaInfo.groupUrl"
+            target="_blank"
+          >{{ sumaInfo.group }}</a>
+          <template v-else>{{ sumaInfo.group }}</template>)
+        </span>
       </div>
       <div v-if="url" class="open-suma">
         <a :href="url" target="_blank">

@@ -532,57 +532,119 @@ export async function sumaListSystemEvents(store, suseManagerID, sid) {
  * @param {array} errataIds - array of patches (erratas) ids
  */
 export async function sumaScheduleApplyErrata(store, suseManagerID, sids, errataIds) {
+  // SUMA expects arrays of ints for sids and errataIds — coerce, because ids
+  // can flow in as strings (e.g. from a Resource's metadata.name).
   const data = {
-    sids,
-    errataIds,
-    onlyRelevant: true,
+    sids:      (sids || []).map((s) => Number(s)),
+    errataIds: (errataIds || []).map((e) => Number(e)),
   };
 
-  console.error('>>>>>>>>');
-  console.log(suseManagerID);
-  console.log(sids);
-  console.log(errataIds);
+  let schedule;
+  let okay = false;
+  let errorMsg;
 
-  const schedule = await proxyRequest(store, suseManagerID, '/system/scheduleApplyErrata', 'post', data);
+  try {
+    schedule = await proxyRequest(store, suseManagerID, '/system/scheduleApplyErrata', 'post', data);
+    okay = schedule.status === 200 && schedule.data?.success;
+    errorMsg = schedule.data?.message;
+  } catch (e) {
+    // management/request rejects on non-2xx — surface the SUMA error message when present
+    errorMsg = e?.data?.message || e?._statusText || e?.message || 'Request failed';
+  }
 
-  // Check the response, should contain a list of action ids that we can use to rack completion of patches
-
-  const okay = schedule.status === 200 && schedule.data?.success;
-
-  console.error(schedule);
-
-  // Schedule is a list of actionIds, one for each system that was patched. We can use these to track progress of the patching process.
   if (okay) {
-
-    // show success notification
     store.dispatch('suma/updateNotifications', {
       type:    'success',
       message: 'OS Patches successfully scheduled. OS Patching will begin shortly.'
     });
 
-    // prepare all requests for SUMA system IDs for updating events list
-  //   const reqs = {};
+    // Kick a couple of event refreshes so the SumaNotification panel picks up
+    // the newly scheduled action(s). SUMA takes a moment to surface them.
+    const refreshEvents = () => {
+      sids.forEach((sid) => {
+        store.dispatch('suma/updateSystemEventsList', {
+          store,
+          suseManagerLink: suseManagerID,
+          sid,
+        });
+      });
+    };
 
-  //   sids.forEach((sid) => {
-  //     store.dispatch('suma/updateSystemEventsList', {
-  //       store,
-  //       sid
-  //     });
-  //   });
-
-  //   // update list of suma actions in progress after a given timeout
-  //   setTimeout(async() => {
-  //     await allHash(reqs);
-  //   }, 4000 );
+    setTimeout(refreshEvents, 2000);
+    setTimeout(refreshEvents, 10000);
   } else {
-    const msg = schedule.data?.message;
-
-    // show error notification
     store.dispatch('suma/updateNotifications', {
       type:    'error',
-      message: `Something went wrong when applying OS patches. Please try again (${msg})`
+      message: `Something went wrong when applying OS patches. Please try again (${ errorMsg })`
     });
   }
 
   return schedule;
+}
+
+/**
+ * SUMA system.scheduleReboot - schedule an immediate reboot of a single system.
+ */
+export async function sumaScheduleSystemReboot(store, suseManagerID, sid) {
+  const payload = {
+    sid:                Number(sid),
+    // SUMA requires earliestOccurrence — send "now" so the reboot fires ASAP.
+    earliestOccurrence: new Date().toISOString(),
+  };
+
+  let schedule;
+  let okay = false;
+  let errorMsg;
+
+  try {
+    schedule = await proxyRequest(store, suseManagerID, '/system/scheduleReboot', 'post', payload);
+    okay = schedule.status === 200 && schedule.data?.success;
+    errorMsg = schedule.data?.message;
+  } catch (e) {
+    errorMsg = e?.data?.message || e?._statusText || e?.message || 'Request failed';
+  }
+
+  if (okay) {
+    store.dispatch('suma/updateNotifications', {
+      type:    'success',
+      message: 'System reboot successfully scheduled.'
+    });
+
+    // Give the SumaNotification panel a chance to see the new in-progress action.
+    const refresh = () => {
+      store.dispatch('suma/updateSystemEventsList', {
+        store,
+        suseManagerLink: suseManagerID,
+        sid,
+      });
+    };
+
+    setTimeout(refresh, 2000);
+    setTimeout(refresh, 10000);
+  } else {
+    store.dispatch('suma/updateNotifications', {
+      type:    'error',
+      message: `Failed to schedule reboot: ${ errorMsg }`
+    });
+  }
+
+  return { okay, error: okay ? undefined : errorMsg, raw: schedule };
+}
+
+/**
+ * SUMA schedule.listCompletedActions - list actions that have completed
+ */
+export async function sumaListCompletedActions(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/schedule/listCompletedActions');
+
+  return response.data?.result || [];
+}
+
+/**
+ * SUMA schedule.listFailedActions - list actions that have failed
+ */
+export async function sumaListFailedActions(store, suseManagerID) {
+  const response = await proxyRequest(store, suseManagerID, '/schedule/listFailedActions');
+
+  return response.data?.result || [];
 }

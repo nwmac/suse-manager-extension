@@ -3,43 +3,42 @@ export default {
     return state.clusterInstanceMap[id];
   },
 
-  getSystem:  (state: any) => (id: string) => {
-    console.error('getSystem');
-    console.error(id);
-    console.error(state);
+  getSystem: (state: any) => (id: string) => {
     return state.systems[id];
   },
 
-  // Get SUMA Systems for the specified SUMA instance
-  // getSumaSystems: (state: any) => (id: string) => {
-  //   console.error('getSumaSystems');
-  //   console.error(id);
-  //   console.error(state);
-  //   return state.sumaInstances[id]?.sumaSystems;
-  // },
+  getNotifications: (state: any) => state.notifications,
 
-  getNotifications:         (state: any) => state.notifications,
+  /**
+   * Flatten in-progress events across every system in every tracked system group.
+   * Each event is enriched with `sid`, `suseManagerId` and `profile_name` at the point
+   * it's written to state, so consumers (SumaNotification, model.sumaPatchActionEnabled)
+   * can identify which SUMA instance and system it belongs to.
+   */
   getSumaActionsInProgress: (state: any) => {
-    let events:any = [];
+    let events: any[] = [];
 
-    state.sumaSystems.forEach((system:any) => {
-      if (system.events?.length) {
-        events = events.concat(system.events);
-      }
+    Object.values(state.systemGroups || {}).forEach((systems: any) => {
+      (systems || []).forEach((system: any) => {
+        if (system?.events?.length) {
+          events = events.concat(system.events);
+        }
+      });
     });
 
     return events;
   },
+
   areSumaActionsInProgress: (state: any) => (name: string) => {
     let inProgress = false;
 
-    state.sumaSystems.forEach((system:any) => {
-      if (system.profile_name === name && system.events?.length) {
-        inProgress = true;
-      }
+    Object.values(state.systemGroups || {}).forEach((systems: any) => {
+      (systems || []).forEach((system: any) => {
+        if (system?.profile_name === name && system?.events?.length) {
+          inProgress = true;
+        }
+      });
     });
-
-    console.error(inProgress);
 
     return inProgress;
   },
@@ -48,7 +47,7 @@ export default {
     return state.patches[name];
   },
 
-  getCount: (state: any) =>  {
+  getCount: (state: any) => {
     return state.count;
   },
 
@@ -57,6 +56,13 @@ export default {
    */
   getSystemGroup: (state: any) => (id: string) => {
     return state.systemGroups[id] || [];
+  },
+
+  /**
+   * Get the SUMA system group numeric id for a suseManagerLink.
+   */
+  getSystemGroupId: (state: any) => (id: string) => {
+    return state.systemGroupIds?.[id];
   },
 
   /**
@@ -71,5 +77,5 @@ export default {
    */
   getSystemGroupActions: (state: any) => (id: string) => {
     return state.actions[id] || [];
-  },  
+  }
 };

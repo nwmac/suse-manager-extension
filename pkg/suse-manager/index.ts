@@ -39,6 +39,7 @@ export default function(plugin: IPlugin, args:any) {
   plugin.register('dialog', 'SuseManagerManageLinkDialog', () => import('./components/dialogs/ManageLinkDialog.vue'));
   plugin.register('dialog', 'SuseManagerRemoveLinkDialog', () => import('./components/dialogs/RemoveLinkDialog.vue'));
   plugin.register('dialog', 'SuseManagerRegisterNodesDialog', () => import('./components/dialogs/RegisterNodesDialog.vue'));
+  plugin.register('dialog', 'SuseManagerRebootDialog', () => import('./components/dialogs/RebootDialog.vue'));
 
   // Add a route
   plugin.addRoute({
@@ -69,7 +70,7 @@ export default function(plugin: IPlugin, args:any) {
   // add notification panel for ongoing OS patches
   plugin.addPanel(
     PanelLocation.DETAILS_MASTHEAD,
-    { resource: [CAPI.RANCHER_CLUSTER, MANAGEMENT.NODE], mode: ['detail'] },
+    { resource: [CAPI.RANCHER_CLUSTER, MANAGEMENT.NODE, CAPI.MACHINE], mode: ['detail'] },
     { component: () => import('./components/SumaNotification.vue') }
   );
 

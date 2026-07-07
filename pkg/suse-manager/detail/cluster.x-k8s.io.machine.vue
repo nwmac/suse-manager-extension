@@ -9,6 +9,7 @@ import Tab from '@shell/components/Tabbed/Tab';
 import SortableTable from '@shell/components/SortableTable';
 import { _VIEW } from '@shell/config/query-params';
 import { sumaSystemForNode } from '../shared/utils';
+import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 import SumaServerInfo from '../components/SumaServerInfo';
 
 const SUSE_MANAGER_LINK_ANNOTATION = 'susemanager.cattle.io/link';
@@ -31,14 +32,8 @@ export default {
     },
   },
   async fetch() {
-    // Value is a machine object, we need to get the cluster ID for it
-    console.error('!!!!!!!!!!!!!!!!!');
-    console.error(this.value);
     const clusterName = this.value.spec?.clusterName;
 
-    console.error(clusterName);
-
-    // If we have a cluster Name, we need to get the cluster ID for it
     if (clusterName) {
       const provCluster = await this.$store.dispatch('management/find', {
         type: CAPI.RANCHER_CLUSTER,
@@ -46,20 +41,16 @@ export default {
         opt:  { watch: false }
       });
 
-      console.error(provCluster);
-
       this.suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
-
-      console.error(this.suseManagerLink);
     }
   },
-  
+
   data() {
     return {
       suseManagerLink:    false,
       viewMode:           _VIEW,
-      name:                '',
-      loading:             true,
+      name:               '',
+      loading:            true,
       sumaPatchesHeaders: [
         {
           name:      'advisory-type',
@@ -76,12 +67,6 @@ export default {
           formatter:     'Link',
           formatterOpts: { urlKey: 'sumaErrataUrl' },
         },
-        // {
-        //   name:     'status',
-        //   labelKey: 'suma.node-details.cols.advisory-status',
-        //   value:    'status',
-        //   sort:     'status',
-        // },
         {
           name:     'advisory-synopsis',
           labelKey: 'suma.node-details.cols.advisory-synopsis',
@@ -93,6 +78,42 @@ export default {
           labelKey: 'suma.node-details.cols.advisory-update-date',
           value:    'update_date',
           sort:     'update_date:desc',
+        },
+      ],
+      sumaEventsHeaders: [
+        {
+          name:  'created',
+          label: 'Created',
+          value: 'created_date',
+          sort:  'created_date:desc',
+          width: 200,
+        },
+        {
+          name:  'status',
+          label: 'Status',
+          value: 'status',
+          sort:  'status',
+          width: 120,
+        },
+        {
+          name:  'type',
+          label: 'Type',
+          value: 'action_type',
+          sort:  'action_type',
+          width: 200,
+        },
+        {
+          name:  'name',
+          label: 'Name',
+          value: 'name',
+          sort:  'name',
+        },
+        {
+          name:  'actions',
+          label: '',
+          value: 'eventUrl',
+          width: 40,
+          align: 'center',
         },
       ],
     };
@@ -122,35 +143,68 @@ export default {
 
     sumaSystem() {
       const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
-      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
 
-      console.error('MLM SYSTEM ', sumaSystem);
-
-      return sumaSystem;
+      return sumaSystemForNode(sumaSystems, this.value);
     },
 
     sumaPatches() {
-      const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
-      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
+      return this.sumaSystem?.listLatestUpgradablePackages || [];
+    },
 
-      // const sumaSystems = this.$store.getters['suma/getSumaSystems'];
-      // const currSystem = sumaSystems.find(g => g?.profile_name === this.value.nameDisplay);
-      // let sumaPatches = [];
+    /**
+     * MLM base URL, resolved from the SumaServer resource that SumaPanel
+     * already loaded. Used to deep-link event rows into the MLM UI.
+     */
+    mlmBaseUrl() {
+      const id = this.sumaSystem?.suseManagerId;
 
-      // if (currSystem) {
-      //   sumaPatches = currSystem.listLatestUpgradablePackages;
-      // }
+      if (!id) {
+        return '';
+      }
 
-      // return sumaPatches;
-      return sumaSystem?.listLatestUpgradablePackages || [];
+      const server = this.$store.getters['management/byId'](SUMA_SERVER_RESOURCE_NAME, `${ SUSE_MANAGER_NAMESPACE }/${ id }`);
+
+      return server?.spec?.url || '';
+    },
+
+    /**
+     * Full event history for this system, most recent first, with a derived
+     * status column based on pickup / completed dates and a per-row deep link
+     * back into the MLM UI's event detail page.
+     */
+    sumaEvents() {
+      const raw = this.sumaSystem?.allEvents || [];
+      const sid = this.sumaSystem?.id;
+      const base = this.mlmBaseUrl;
+
+      return raw.map((ev) => {
+        let status = 'Pending';
+
+        if (ev.completed_date) {
+          status = 'Completed';
+        } else if (ev.pickup_date) {
+          status = 'In Progress';
+        }
+
+        const eventUrl = base && sid && ev.id
+          ? `${ base }/rhn/systems/details/history/Event.do?sid=${ sid }&aid=${ ev.id }`
+          : '';
+
+        return {
+          ...ev, status, eventUrl
+        };
+      }).sort((a, b) => {
+        const at = new Date(a.created_date || 0).getTime();
+        const bt = new Date(b.created_date || 0).getTime();
+
+        return bt - at;
+      });
     },
 
     loadingPatchList() {
       const loading = this.$store.getters['suma/getSystemGroupLoadingStatus'](this.suseManagerLink);
-      const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
-      const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
 
-      if (sumaSystem) {
+      if (this.sumaSystem) {
         return false;
       }
 
@@ -169,17 +223,6 @@ export default {
       :need-events="false"
       @update:value="$emit('input', $event)"
     >
-      <!-- <Tab
-        name="node-edit"
-        label-key="suma.node-details.tabs.node"
-        :weight="4"
-      >
-        <LabeledInput
-          v-model="name"
-          :label="t('managementNode.customName')"
-          :mode="mode"
-        />
-      </Tab> -->
       <Tab
         v-if="mode === viewMode"
         name="suma-server"
@@ -206,5 +249,47 @@ export default {
           default-sort-by="advisory-type"
         />
       </Tab>
+      <Tab
+        v-if="mode === viewMode"
+        name="suma-events"
+        label="Events"
+        :weight="2"
+      >
+        <SortableTable
+          :loading="loadingPatchList"
+          :headers="sumaEventsHeaders"
+          :rows="sumaEvents"
+          :table-actions="false"
+          :row-actions="false"
+          key-field="id"
+          default-sort-by="created"
+        >
+          <template #cell:actions="{ row }">
+            <a
+              v-if="row.eventUrl"
+              :href="row.eventUrl"
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              class="event-link"
+              :title="'Open in SUSE Multi-Linux Manager'"
+            >
+              <i class="icon icon-external-link" />
+            </a>
+          </template>
+        </SortableTable>
+      </Tab>
     </ResourceTabs>
 </template>
+
+<style lang="scss" scoped>
+.event-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--link);
+
+  &:hover {
+    text-decoration: none;
+    opacity: 0.8;
+  }
+}
+</style>

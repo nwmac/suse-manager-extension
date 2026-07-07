@@ -1,4 +1,4 @@
-import { SystemGroupActions, SystemGroup, SystemGroupLoadingStatus } from "../../shared/definitions";
+import { SystemGroupActions, SystemGroup, SystemGroupLoadingStatus } from '../../shared/definitions';
 
 const NOTIFICATION_TIMEOUT = 5000;
 
@@ -6,44 +6,44 @@ const NOTIFICATION_TIMEOUT = 5000;
 var notificationTimeout: any;
 
 export default {
-  // updateSumaSystemsList(state: any, data: any) {
-  //   const { sumaID, sumaInstance, sumaSystems } = data;
-
-  //   if (!state.sumaInstances[sumaInstance]) {
-  //     state.sumaInstances[sumaInstance] = {};
-  //   }
-
-  //   state.sumaInstances[sumaInstance].sumaSystems = sumaSystems;
-
-  //   // Update the patch info as well
-  //   sumaSystems.forEach((s: any) => {
-  //     const ip = s.network?.ip;
-
-  //     if (ip) {
-  //       const id = `${ sumaInstance }/${ ip }`;
-
-  //       console.log(`Storing ${ id }`);
-
-  //       // state.systems[id] = s;
-  //       state.patches[id] = 100;
-  //     }
-  //   });
-  // },
-
+  /**
+   * Replace the `events` array on the system whose id matches `data.sid` inside
+   * whichever system group contains it. Events are pre-filtered to those still
+   * in-progress and enriched with sid / suseManagerId / profile_name so the
+   * notification panel and per-patch getters can find the owning MLM instance.
+   */
   updateSystemEventsList(state: any, data: any) {
-    const index = state.sumaSystems.findIndex((s: any) => s.id === data.sid);
+    const { sid, systemEvents, suseManagerId } = data;
+    const eventsInProgress = (systemEvents || []).filter((ev: any) => ev.created_date && !ev.completed_date);
 
-    if (index >= 0) {
-      const eventsInProgress = data.systemEvents.filter((ev:any) => ev.created_date && !ev.completed_date);
-      const events = eventsInProgress.map((ev:any) => {
-        return {
-          ...ev,
-          sid:          data.sid,
-          profile_name: state.sumaSystems[index].profile_name
-        };
-      });
+    const nextGroups = { ...state.systemGroups };
+    let updated = false;
 
-      state.sumaSystems[index].events = events;
+    Object.keys(nextGroups).forEach((groupKey) => {
+      const systems = nextGroups[groupKey] || [];
+      const idx = systems.findIndex((s: any) => s.id === sid);
+
+      if (idx < 0) {
+        return;
+      }
+
+      const system = systems[idx];
+      const events = eventsInProgress.map((ev: any) => ({
+        ...ev,
+        sid,
+        suseManagerId: suseManagerId || system?.suseManagerId,
+        profile_name:  system.profile_name,
+      }));
+
+      const newSystems = [...systems];
+
+      newSystems[idx] = { ...system, events };
+      nextGroups[groupKey] = newSystems;
+      updated = true;
+    });
+
+    if (updated) {
+      state.systemGroups = nextGroups;
     }
   },
 
@@ -51,16 +51,14 @@ export default {
     state.notifications = notification;
 
     clearTimeout(notificationTimeout);
-    
+
     notificationTimeout = setTimeout(() => {
       state.notifications = {};
-    }, NOTIFICATION_TIMEOUT );
+    }, notification?.duration || NOTIFICATION_TIMEOUT);
   },
 
   updateClusterMap(state: any, data: any) {
     state.clusterInstanceMap[data.clusterId] = data.sumaId;
-
-    console.error(`MAPPING: ${ data.clusterId } to ${ data.sumaId }`);
   },
 
   updatePatchInfo(state: any, data: any) {
@@ -74,8 +72,19 @@ export default {
    */
   updateSystemGroup(state: any, data: SystemGroup) {
     state.systemGroups = {
-      ... state.systemGroups,
+      ...state.systemGroups,
       [data.id]: data.systems
+    };
+  },
+
+  /**
+   * Record the SUMA system group id for a suseManagerLink so we can link out
+   * to the MLM UI's group detail page.
+   */
+  updateSystemGroupId(state: any, data: { id: string; groupId: number | string }) {
+    state.systemGroupIds = {
+      ...state.systemGroupIds,
+      [data.id]: data.groupId,
     };
   },
 
@@ -84,7 +93,7 @@ export default {
    */
   updateLoadingStatus(state: any, data: SystemGroupLoadingStatus) {
     state.loadingStatus = {
-      ... state.loadingStatus,
+      ...state.loadingStatus,
       [data.id]: data
     };
   },
@@ -94,8 +103,8 @@ export default {
    */
   updateSystemGroupActions(state: any, data: SystemGroupActions) {
     state.systemGroups = {
-      ... state.systemGroups,
+      ...state.systemGroups,
       [data.id]: data.actions
     };
-  },
+  }
 };

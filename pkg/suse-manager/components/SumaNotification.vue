@@ -1,59 +1,234 @@
-
 <script>
 import { mapGetters } from 'vuex';
 import { Banner } from '@components/Banner';
 import { allHash } from '@shell/utils/promise';
 import { CAPI, MANAGEMENT } from '@shell/config/types';
+import { formatActionLine } from '../shared/utils';
 
-// TODO: we are missing the context of the systems in display... We don't need to show info about ALL systems
-// registered where they aren't needed
 export default {
   name:       'SumaNotification',
   components: { Banner },
+
+  // The extension panel host (ExtensionPanel) passes the current detail
+  // resource down as `resource` — this is the cluster, node, or machine
+  // whose detail page is being viewed.
+  props: {
+    resource: {
+      type:    Object,
+      default: () => ({}),
+    },
+  },
+
   data() {
-    return { poolingInterval: null };
+    return {
+      poolingInterval: null,
+      // Action id → { action_type, profile_name, name } snapshot for every action
+      // observed in-progress during the current session. Retained so we can
+      // format the outcome message after the batch drains, then cleared.
+      sessionActions: {},
+      // The last non-empty relevantActions we saw. Held on-screen while we
+      // wait for SUMA to surface completed / failed outcomes so the panel
+      // doesn't blink to empty between the in-progress banner disappearing
+      // and the outcome banner appearing.
+      lastActionsSnapshot: [],
+      // True from the moment relevantActions drains to empty until we've
+      // either received an outcome from summarizePatchOutcomes or given up.
+      pendingOutcome: false,
+    };
   },
 
   computed: {
     ...mapGetters('suma', ['getSumaActionsInProgress', 'getNotifications']),
-    clusterName() {
-      // this is where we get vital information from (either cluster or node details depending on the view)
-      const currScreenValueProp = this.$parent?.$parent?.value;
 
-      // this means we are on the cluster details view...
-      if (currScreenValueProp && currScreenValueProp.type === CAPI.RANCHER_CLUSTER) {
-        const currProvCluster = currScreenValueProp;
+    /**
+     * Events in progress that relate to the currently displayed resource.
+     * For a cluster: every event in the SUMA group backing that cluster.
+     * For a node or machine: only events whose sid matches the SUMA system
+     * that maps to this node/machine.
+     */
+    relevantActions() {
+      const events = this.getSumaActionsInProgress || [];
 
-        if (currProvCluster?.status?.clusterName) {
-          return currProvCluster?.status?.clusterName;
+      if (!events.length) {
+        return [];
+      }
+
+      const type = this.resource?.type;
+
+      // On a cluster detail page, show everything for the group backing this cluster
+      if (type === CAPI.RANCHER_CLUSTER) {
+        const groupSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink) || [];
+        const sids = new Set(groupSystems.map((s) => s.id));
+
+        return events.filter((ev) => sids.has(ev.sid));
+      }
+
+      // On a node/machine detail page, narrow to the matching SUMA system
+      const targetSid = this.currentSystemId;
+
+      if (targetSid) {
+        return events.filter((ev) => ev.sid === targetSid);
+      }
+
+      return [];
+    },
+
+    /**
+     * What the in-progress banner should render. Falls back to the last
+     * captured snapshot while we're waiting for the outcome (pendingOutcome),
+     * so the banner doesn't blink off between "finished" and "outcome known".
+     */
+    displayActions() {
+      if (this.relevantActions.length) {
+        return this.relevantActions;
+      }
+
+      if (this.pendingOutcome) {
+        return this.lastActionsSnapshot;
+      }
+
+      return [];
+    },
+
+    /**
+     * The MLM group link (`mlm-name/group-name`) for the cluster this resource
+     * belongs to. Established by the SumaPanel component's fetch — we just read it
+     * out of the store's clusterInstanceMap here.
+     */
+    suseManagerLink() {
+      const type = this.resource?.type;
+
+      if (type === CAPI.RANCHER_CLUSTER) {
+        const clusterName = this.resource?.status?.clusterName;
+
+        return clusterName ? this.$store.getters['suma/getSumaInstanceForCluster'](clusterName) : '';
+      }
+
+      if (type === MANAGEMENT.NODE) {
+        const mgmtClusterId = this.resource?.mgmtClusterId;
+
+        return mgmtClusterId ? this.$store.getters['suma/getSumaInstanceForCluster'](mgmtClusterId) : '';
+      }
+
+      if (type === CAPI.MACHINE) {
+        // For a machine, spec.clusterName is the prov cluster name (not the mgmt cluster id
+        // that clusterInstanceMap is keyed by). Resolve the prov cluster synchronously from
+        // the store (SumaPanel has already dispatched a find for it) and use its
+        // status.clusterName — the mgmt cluster id.
+        const clusterName = this.resource?.spec?.clusterName;
+        const ns = this.resource?.metadata?.namespace;
+
+        if (!clusterName || !ns) {
+          return '';
         }
-      // here we are looking at the node details view, where we only load the list of upgradable packages
-      } else if (currScreenValueProp && currScreenValueProp.type === MANAGEMENT.NODE) {
-        const currNode = currScreenValueProp;
 
-        if (currNode?.mgmtClusterId) {
-          return currNode?.mgmtClusterId;
-        }
+        const provCluster = this.$store.getters['management/byId'](CAPI.RANCHER_CLUSTER, `${ ns }/${ clusterName }`);
+        const mgmtClusterId = provCluster?.status?.clusterName;
+
+        return mgmtClusterId ? this.$store.getters['suma/getSumaInstanceForCluster'](mgmtClusterId) : '';
       }
 
       return '';
-    }
+    },
+
+    /**
+     * The SUMA system id backing this node or machine (undefined for cluster views).
+     */
+    currentSystemId() {
+      const type = this.resource?.type;
+
+      if (type !== MANAGEMENT.NODE && type !== CAPI.MACHINE) {
+        return undefined;
+      }
+
+      const groupSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink) || [];
+      const match = groupSystems.find((s) => {
+        let nodeIP = this.resource?.internalIp;
+
+        if (!nodeIP && this.resource?.status?.addresses) {
+          nodeIP = this.resource.status.addresses.find((a) => a.type === 'InternalIP')?.address;
+        }
+
+        return s?.network?.ip && s.network.ip === nodeIP;
+      });
+
+      return match?.id;
+    },
   },
 
-  methods:  {
+  methods: {
+    formatActionLine,
+
+    /**
+     * Called when the in-progress list drains to empty. Holds the banner up
+     * via pendingOutcome, retries summarizePatchOutcomes until SUMA has the
+     * terminal state (or we give up), then refreshes the systems list so
+     * newly-applied patches drop out of the upgradable list.
+     */
+    async finalizeSession() {
+      const actions = this.sessionActions;
+
+      this.sessionActions = {};
+      this.pendingOutcome = true;
+
+      // Poll for the outcome. SUMA typically needs a beat to move actions
+      // from the in-progress bucket into completed / failed.
+      const MAX_ATTEMPTS = 6;
+
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 500 : 2000));
+
+        const reported = await this.$store.dispatch('suma/summarizePatchOutcomes', {
+          store:           this.$store,
+          suseManagerLink: this.suseManagerLink,
+          actions,
+        });
+
+        if (reported) {
+          break;
+        }
+      }
+
+      this.pendingOutcome = false;
+
+      // Refresh systems so the applied patches drop out of the upgradable list.
+      const clusterName = this.suseManagerLink.split('/')[1];
+
+      this.$store.dispatch('suma/fetchSumaSystemsList', {
+        store:           this.$store,
+        suseManagerLink: this.suseManagerLink,
+        clusterName,
+      });
+    },
+
     async updateEventsInProgress() {
       const reqs = {};
-      const uniqueSystemIds = [...new Set(this.getSumaActionsInProgress.map(ev => ev.sid))];
+      const seen = new Set();
 
-      uniqueSystemIds.forEach((sid) => {
-        reqs[sid] = this.$store.dispatch('suma/updateSystemEventsList', {
-          store: this.$store,
-          sid
+      this.relevantActions.forEach((ev) => {
+        const suseManagerId = ev.suseManagerId;
+        const sid = ev.sid;
+
+        if (!suseManagerId || !sid) {
+          return;
+        }
+
+        const key = `${ suseManagerId }::${ sid }`;
+
+        if (seen.has(key)) {
+          return;
+        }
+
+        seen.add(key);
+        reqs[key] = this.$store.dispatch('suma/updateSystemEventsList', {
+          store:           this.$store,
+          suseManagerLink: suseManagerId,
+          sid,
         });
       });
 
       return await allHash(reqs);
-    }
+    },
   },
 
   beforeDestroy() {
@@ -63,29 +238,42 @@ export default {
   },
 
   watch: {
-    getSumaActionsInProgress: {
-      handler(neu) {
-        if (neu.length && !this.poolingInterval) {
+    relevantActions: {
+      handler(neu, old) {
+        const hasNew = neu && neu.length;
+        const hadOld = old && old.length;
+
+        // Accumulate a snapshot of every action seen in-progress during the
+        // running session so we can format the outcome message once the
+        // batch drains (SUMA's completed / failed action listings don't
+        // include per-system fields like profile_name).
+        (neu || []).forEach((ev) => {
+          if (ev?.id !== undefined && ev?.id !== null) {
+            this.sessionActions[String(ev.id)] = {
+              action_type:  ev.action_type,
+              profile_name: ev.profile_name,
+              name:         ev.name,
+            };
+          }
+        });
+
+        // Keep the last non-empty in-progress list around so we can keep
+        // rendering it while we wait for the outcome after the drain.
+        if (hasNew) {
+          this.lastActionsSnapshot = neu.slice();
+        }
+
+        if (hasNew && !this.poolingInterval) {
           this.poolingInterval = setInterval(this.updateEventsInProgress, 5000);
-        } else if (!neu.length && this.poolingInterval) {
+        } else if (!hasNew && this.poolingInterval) {
           clearInterval(this.poolingInterval);
           this.poolingInterval = null;
+        }
 
-          // update data on screen... Needs a delay for the SUMA api to update
-          setTimeout(() => {
-            this.$store.dispatch('suma/fetchSumaSystemsList', {
-              store:       this.$store,
-              clusterName: this.clusterName
-            });
-          }, 5000 );
-
-          // max time to update on the backend is 60sec, let's do it one last time in 50sec
-          setTimeout(() => {
-            this.$store.dispatch('suma/fetchSumaSystemsList', {
-              store:       this.$store,
-              clusterName: this.clusterName
-            });
-          }, 50000 );
+        // Session ended — no more in-progress actions. Kick off the finalize
+        // flow which keeps the panel visible until we can report an outcome.
+        if (hadOld && !hasNew && this.suseManagerLink) {
+          this.finalizeSession();
         }
       },
       immediate: true
@@ -104,7 +292,7 @@ export default {
       <p>{{ getNotifications.message }}</p>
     </Banner>
     <Banner
-      v-else-if="getSumaActionsInProgress.length"
+      v-else-if="displayActions.length"
       color="info"
       class="msg-banner"
     >
@@ -112,10 +300,10 @@ export default {
         {{ t('suma.notification.title') + ':' }}
       </p>
       <p
-        v-for="act in getSumaActionsInProgress"
+        v-for="act in displayActions"
         :key="act.id"
       >
-        {{ `- ${act.action_type} on ${act.profile_name} => ${act.name}` }}
+        {{ formatActionLine(act) }}
       </p>
     </Banner>
   </div>

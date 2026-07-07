@@ -1,5 +1,5 @@
 import Resource from '@shell/plugins/dashboard-store/resource-class';
-import { sumaScheduleApplyErrata, getSuseManagerConfig } from '../shared/api';
+import { sumaScheduleApplyErrata } from '../shared/api';
 import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 
 export default class SumaPatches extends Resource {
@@ -15,76 +15,30 @@ export default class SumaPatches extends Resource {
   }
 
   async applySinglePatch() {
-    let sumaSystemFound;
-
-    console.error(this);
-    console.error(this.suma?.suseManagerId);
-
-    const id = `${ SUSE_MANAGER_NAMESPACE }/${ this.suma?.suseManagerId }`;
-
-    const mlmInstance = this.$rootGetters['management/byId'](SUMA_SERVER_RESOURCE_NAME, id);
-
-    console.error(mlmInstance);
-
-    return;
-
-    if (this.suma) {
-      console.error('applySinglePatch');
-      console.error(this.suma.suseManagerId);
-      sumaScheduleApplyErrata(this.store, this.suma.suseManagerId, [this.suma.systemId], [this.id]);
+    if (this.suma?.suseManagerId && this.suma?.systemId) {
+      await sumaScheduleApplyErrata(
+        this.store,
+        this.suma.suseManagerId,
+        [this.suma.systemId],
+        [this.id],
+      );
     }
-
-    // const sumaSystems = this.store.getters['suma/getSumaSystems'];
-
-    // sumaSystems.forEach((system) => {
-    //   if (system.listLatestUpgradablePackages?.length) {
-    //     system.listLatestUpgradablePackages.forEach((pkg) => {
-    //       if (pkg.id === this.id) {
-    //         sumaSystemFound = system;
-    //       }
-    //     });
-    //   }
-    // });
-
-    // if (sumaSystemFound) {
-    //   
-    // }
   }
 
+  /**
+   * Disable the "Apply" row action while an in-progress SUMA action for this
+   * system already mentions this advisory. Events are surfaced globally via
+   * getSumaActionsInProgress; filter by sid to scope to this specific system.
+   */
   get sumaPatchActionEnabled() {
-    return true;
-  }
-
-  get __sumaPatchActionEnabled() {
-    let sumaSystemFound;
-    let actionFound;
-    console.error('SUMA PATCHES');
-    console.error(this);
-
-    const sumaSystems = this.store.getters['suma/getSumaSystems'];
-    const sumaActionsInProgress = this.store.getters['suma/getSumaActionsInProgress'];
-
-    sumaSystems.forEach((system) => {
-      if (system.listLatestUpgradablePackages?.length) {
-        system.listLatestUpgradablePackages.forEach((pkg) => {
-          if (pkg.id === this.id) {
-            sumaSystemFound = system;
-          }
-        });
-      }
+    const actions = this.store.getters['suma/getSumaActionsInProgress'] || [];
+    const inProgress = actions.some((action) => {
+      return action?.sid === this.suma?.systemId
+        && action?.name
+        && action.name.includes(this.advisory_name);
     });
 
-    if (sumaSystemFound) {
-      sumaActionsInProgress.forEach((action) => {
-        if (action.name && action.name.includes(this.advisory_name)) {
-          actionFound = true;
-        }
-      });
-
-      return !actionFound;
-    }
-
-    return true;
+    return !inProgress;
   }
 
   get status() {

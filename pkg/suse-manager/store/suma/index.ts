@@ -7,18 +7,22 @@ import actions from './actions';
 const sumaFactory = (): CoreStoreSpecifics => {
   return {
     state() {
-      return { 
+      return {
         // Map of SUSE Manager Server to data for that server
         // sumaInstances: {},
 
         // Map of cluster IDs to SUMA Instance name
-        // TODO Note needed
+        // TODO Note needed
         clusterInstanceMap: {},
-        
+
         sumaSystems: [], notifications: {},
 
         // Map of system id to system groups
         systemGroups: {},
+
+        // Map of suseManagerLink → SUMA system group id (used to link to the
+        // MLM UI's group detail page)
+        systemGroupIds: {},
 
         // Loading status of each Suse Manager system group
         loadingStatus: {},
