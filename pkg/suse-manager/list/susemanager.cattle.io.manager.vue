@@ -18,6 +18,9 @@ const HELM_CHART_NAME = 'suse-manager-proxy';
 
 const SUMA_SERVER = 'susemanager.cattle.io.manager';
 
+// Route name Rancher uses for any resource detail page.
+const DETAIL_ROUTE_NAME = 'c-cluster-product-resource-namespace-id';
+
 export default {
   components: {
     Banner,
@@ -84,6 +87,27 @@ export default {
 
     if (schema) {
       await this.$fetchType(this.resource);
+
+      // If exactly one MLM server is configured and we arrived via the nav
+      // (route meta.skipList set on the virtualType in product.js), skip the
+      // list and drop the user straight into its detail page — one less
+      // click. Any other entry point (the "back to list" link from the
+      // detail masthead, direct URLs, etc.) doesn't set skipList, so the
+      // list renders normally.
+      if (this.$route.query?.skipList === 'true' && this.rows?.length === 1) {
+        const row = this.rows[0];
+
+        this.$router.replace({
+          name:   DETAIL_ROUTE_NAME,
+          params: {
+            resource:  this.resource,
+            namespace: row.metadata?.namespace,
+            id:        row.metadata?.name,
+          },
+        });
+
+        return;
+      }
     }
 
     // Check for the Helm Repository

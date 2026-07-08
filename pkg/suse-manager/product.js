@@ -27,6 +27,9 @@ export function init(plugin, store) {
       params: {
         resource: SUMA_SERVER,
         product:  'manager'
+      },
+      query: {
+        skipList: 'true'
       }
     },
     exact:      true

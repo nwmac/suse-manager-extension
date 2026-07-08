@@ -38,7 +38,7 @@ export default class SuseManager extends SteveModel {
   set passwordSecret(value) {
     this.spec = this.spec || {};
     this.spec.passwordSecret = value;
-  }    
+  }
 
 };
 
