@@ -27,11 +27,11 @@ export default {
     },
 
     patchSummary() {
-      return this.system ? groupPatches(this.system) : { total: 0, critical: 0 };
+      return this.system ? groupPatches(this.system) : { total: 0, security: 0 };
     },
 
-    criticalPatches() {
-      return this.patchSummary?.critical || 0;
+    securityPatches() {
+      return this.patchSummary?.security || 0;
     },
 
     totalPatches() {
@@ -228,11 +228,11 @@ export default {
             <template v-if="totalPatches > 0">
               <span class="label">Software Updates Available</span>
               <a
-                v-if="criticalPatches > 0"
+                v-if="securityPatches > 0"
                 class="stat"
                 :href="errataListUrl || undefined"
                 :target="errataListUrl ? '_blank' : undefined"
-              >Critical: {{ criticalPatches }}</a>
+              >Security: {{ securityPatches }}</a>
               <a
                 class="stat"
                 :href="upgradablePackagesUrl || undefined"

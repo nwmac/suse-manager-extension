@@ -93,16 +93,15 @@ export default {
         const summary = groupPatches(sumaSystem);
         let worst;
 
-        if (summary.critical > 0) {
-          worst = 'critical'
-        } else if (summary.important > 0) {
-          worst = 'important'
-        } else if (summary.moderate > 0) {
-          worst = 'moderate'
-        } else if (summary.low > 0) {
-          worst = 'low'
+        // MLM only reports three advisory categories; walk them in order of
+        // importance and pick the first one that has any patches so the row
+        // shows an icon representative of the worst outstanding update.
+        if (summary.security > 0) {
+          worst = 'security';
+        } else if (summary.patch > 0) {
+          worst = 'patch';
         } else {
-          worst = 'bug';
+          worst = 'enhancement';
         }
 
         return {

@@ -28,81 +28,55 @@ export function sumaSystemForNode(systems: any[], node: any) {
   });
 }
 
-// const CRITICAL_PREFIX = 'critical:';
-// const IMPORTANT_PREFIX = 'important:';
-// const MODERATE_PREFIX = ':';
-// const LOW_PREFIX = 'low:';
-
-const SECURITY_ADVISORY = 'Security Advisory';
-const SEVERITY_REGEX = /^([a-z]+): Security.*/;
-
+// MLM returns three advisory types on relevant errata: "Security Advisory",
+// "Bug Fix Advisory" (which we display as "Patch") and "Product Enhancement
+// Advisory". Detect which by substring match on advisory_type — MLM's exact
+// wording has varied slightly across versions.
 const SEVERITY_SORT: { [key: string]: number } = {
-  'critical': 1,
-  'important': 2,
-  'moderate': 3,
-  'low': 4,
-  'bug': 5,
-};
-
-const SEVERITYSORT: { [sort: number]: string } = {
-  100: 'critical',
+  security:    1,
+  patch:       2,
+  enhancement: 3,
 };
 
 
 export function processPatch(patch: any) {
-  // Process the patch object
-  // Process Type and Synopsis to get the actual severity
-  patch.security = (patch.advisory_type === SECURITY_ADVISORY);
+  const type = patch.advisory_type || '';
 
-  if (patch.security) {
-    // Get the severity
-    const severity = patch.advisory_synopsis.match(SEVERITY_REGEX);
-
-    if (severity?.length === 2) {
-      patch.severity = severity[1];
-      patch.synopsis = patch.advisory_synopsis.substr(patch.severity.length + 1).trim();
-    } else {
-      patch.synopsis = patch.advisory_synopsis;
-    }
+  if (type.includes('Security')) {
+    patch.severity = 'security';
+  } else if (type.includes('Enhancement')) {
+    patch.severity = 'enhancement';
   } else {
-    patch.synopsis = patch.advisory_synopsis;
-    patch.severity = 'bug';
+    // Bug Fix Advisories and anything else falls under "Patch".
+    patch.severity = 'patch';
   }
 
+  patch.security = (patch.severity === 'security');
+  patch.synopsis = patch.advisory_synopsis;
   patch.severitySort = SEVERITY_SORT[patch.severity] || 100;
 }
 
 
 export function groupPatches(server: any) {
-  const summary: { [key: string]: number }= {
-    total: 0,
-    critical: 0,
-    important: 0,
-    moderate: 0,
-    low: 0,
-    recommended: 0,
-    bug: 0,
-    unknown: 0,
+  const summary: { [key: string]: number } = {
+    total:       0,
+    security:    0,
+    patch:       0,
+    enhancement: 0,
+    unknown:     0,
   };
-
-  // severitySort
-  console.error('groupPatches');
-  console.error(server);
 
   if (server?.listLatestUpgradablePackages) {
     summary.total = server.listLatestUpgradablePackages.length;
 
     server.listLatestUpgradablePackages.forEach((patch: any) => {
-      const sev = patch.severity || SEVERITYSORT[patch.severitySort] || 'unknown';
+      const sev = patch.severity || 'unknown';
 
       if (summary[sev] !== undefined) {
         summary[sev] = summary[sev] + 1;
       }
     });
   }
-
-  console.error('SUMMARY');
-  console.error(summary);
 
   return summary;
 }
