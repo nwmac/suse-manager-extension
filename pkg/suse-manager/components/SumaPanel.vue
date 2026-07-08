@@ -1,9 +1,11 @@
 <script>
 import { CAPI, MANAGEMENT } from '@shell/config/types';
-import { checkForSumaProxy, getSuseManagerConfig } from '../shared/api';
+import { checkForSumaProxy, getSuseManagerConfig, sumaListRegistrations } from '../shared/api';
 import { groupPatches, sumaSystemForNode } from '../shared/utils';
 import Banner from '@components/Banner/Banner.vue';
 import SeverityIcon from './SeverityIcon.vue';
+
+const REGISTRATIONS_POLL_MS = 5000;
 
 // Annotation on a provisioing cluster that indicates which SUSE Manager and system group
 const SUSE_MANAGER_LINK_ANNOTATION = 'susemanager.cattle.io/link';
@@ -25,105 +27,51 @@ export default {
 
   data() {
     return {
-      suseManager: false,
-      isCluster: true,
-      isMachine: false,
-      suseManagerConfig: false,
+      suseManager:          false,
+      isCluster:            true,
+      isMachine:            false,
+      suseManagerConfig:    false,
+      registrations:        undefined,
+      registrationsPollId:  null,
+      lastRunningCount:     0,
     };
   },
 
   async fetch() {
-    const hasProxy = await checkForSumaProxy(this.$store);
+    await this.loadSumaData();
+  },
 
-    if (hasProxy) {
-      // this is where we get vital information from (either cluster or node details depending on the view)
-      // const currScreenValueProp = this.$parent?.$parent?.value;
+  beforeUnmount() {
+    this.stopRegistrationsPoll();
+  },
 
-      // If this is not a cluster, get the cluster
-      var cluster;
-      var node;
-
-      if (this.resource?.type === MANAGEMENT.NODE) {
-        const currNode = this.resource;
-        const mgmtCluster = await this.$store.dispatch('management/find', {
-          type: MANAGEMENT.CLUSTER,
-          id:   currNode.mgmtClusterId,
-          opt:  { watch: false }
-        });
-
-        const provCluster = await this.$store.dispatch('management/find', {
-          type: CAPI.RANCHER_CLUSTER,
-          id:   mgmtCluster.provClusterId,
-          opt:  { watch: false }
-        });
-
-        cluster = provCluster;
-        node = this.resource;
-        this.isCluster = false;
-        this.isMachine = false
-      } else if (this.resource?.type === CAPI.MACHINE) {
-        console.error('Machine');
-
-        const clusterName = this.resource.spec?.clusterName;
-
-        console.error(clusterName);
-
-        // If we have a cluster Name, we need to get the cluster ID for it
-        if (clusterName) {
-          const provCluster = await this.$store.dispatch('management/find', {
-            type: CAPI.RANCHER_CLUSTER,
-            id:   `${ this.resource.metadata.namespace }/${ clusterName }`,
-            opt:  { watch: false }
-          });
-
-          console.error(provCluster);
-
-          //this.suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
-
-          cluster = provCluster;
-          node = this.resource;
-          this.isCluster = false;
-          this.isMachine = true;
-        }
-      } else {
-        cluster = this.resource;
-        node = undefined;
-        this.isCluster = true;
-        this.isMachine = false;
-      }
-
-      // this means we are on the cluster details view...
-      if (cluster) {
-        const suseManagerLink = cluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
-
-        if (suseManagerLink) {
-          this.suseManager = suseManagerLink;
-
-          // Fetch the suse manager resource
-          getSuseManagerConfig(this.$store, suseManagerLink).then((s) => this.suseManagerConfig = s);
-
-          await this.$store.dispatch('suma/updateClusterMap', {
-            clusterId: cluster.status?.clusterName,
-            sumaId:    suseManagerLink,
-          });
-
-          if (cluster.status?.clusterName) {
-            const systemList = await this.$store.dispatch('suma/fetchSumaSystemsList', {
-              store:       this.$store,
-              suseManagerLink,
-              clusterName: cluster.status?.clusterName,
-              cluster,
-              node
-            });
-          } else {
-            console.error('we are missing the cluster name to get SUMA data', this.resource); // eslint-disable-line no-console
-          }
-        }
-      }
+  watch: {
+    // When the cluster's SUSE Manager link annotation is added/changed (e.g. after
+    // linking via the ManageLinkDialog) reload so the panel updates without a page refresh.
+    linkAnnotation() {
+      this.loadSumaData();
     }
   },
 
   computed: {
+    linkAnnotation() {
+      return this.resource?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+    },
+
+    registrationsSummary() {
+      return this.registrations?.summary;
+    },
+
+    activeRegistrationCount() {
+      const s = this.registrationsSummary;
+
+      return (s?.pending || 0) + (s?.running || 0);
+    },
+
+    recentRegistrationFailures() {
+      return this.registrations?.items?.filter((i) => i.status === 'failed') || [];
+    },
+
     url() {
       const base = this.suseManagerConfig?.spec?.url || '';
 
@@ -202,6 +150,151 @@ export default {
 
       return undefined;
     }
+  },
+
+  methods: {
+    async loadSumaData() {
+      const hasProxy = await checkForSumaProxy(this.$store);
+
+      if (!hasProxy) {
+        return;
+      }
+
+      let cluster;
+      let node;
+
+      if (this.resource?.type === MANAGEMENT.NODE) {
+        const currNode = this.resource;
+        const mgmtCluster = await this.$store.dispatch('management/find', {
+          type: MANAGEMENT.CLUSTER,
+          id:   currNode.mgmtClusterId,
+          opt:  { watch: false }
+        });
+
+        const provCluster = await this.$store.dispatch('management/find', {
+          type: CAPI.RANCHER_CLUSTER,
+          id:   mgmtCluster.provClusterId,
+          opt:  { watch: false }
+        });
+
+        cluster = provCluster;
+        node = this.resource;
+        this.isCluster = false;
+        this.isMachine = false;
+      } else if (this.resource?.type === CAPI.MACHINE) {
+        const clusterName = this.resource.spec?.clusterName;
+
+        if (clusterName) {
+          const provCluster = await this.$store.dispatch('management/find', {
+            type: CAPI.RANCHER_CLUSTER,
+            id:   `${ this.resource.metadata.namespace }/${ clusterName }`,
+            opt:  { watch: false }
+          });
+
+          cluster = provCluster;
+          node = this.resource;
+          this.isCluster = false;
+          this.isMachine = true;
+        }
+      } else {
+        cluster = this.resource;
+        node = undefined;
+        this.isCluster = true;
+        this.isMachine = false;
+      }
+
+      if (!cluster) {
+        return;
+      }
+
+      const suseManagerLink = cluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+
+      // Reset local state so an unlink (annotation removed) reactively hides the panel.
+      this.suseManager = suseManagerLink || false;
+      if (!suseManagerLink) {
+        this.suseManagerConfig = false;
+        this.stopRegistrationsPoll();
+        this.registrations = undefined;
+
+        return;
+      }
+
+      // Only the cluster-scoped panel needs to poll — machine/node views don't
+      // display the group-wide banner.
+      if (this.isCluster) {
+        this.startRegistrationsPoll(suseManagerLink, cluster);
+      } else {
+        this.stopRegistrationsPoll();
+      }
+
+      getSuseManagerConfig(this.$store, suseManagerLink).then((s) => {
+        this.suseManagerConfig = s;
+      });
+
+      await this.$store.dispatch('suma/updateClusterMap', {
+        clusterId: cluster.status?.clusterName,
+        sumaId:    suseManagerLink,
+      });
+
+      if (cluster.status?.clusterName) {
+        await this.$store.dispatch('suma/fetchSumaSystemsList', {
+          store:       this.$store,
+          suseManagerLink,
+          clusterName: cluster.status?.clusterName,
+          cluster,
+          node
+        });
+      } else {
+        console.error('we are missing the cluster name to get SUMA data', this.resource); // eslint-disable-line no-console
+      }
+    },
+
+    startRegistrationsPoll(suseManagerLink, cluster) {
+      this.stopRegistrationsPoll();
+      this.lastRunningCount = 0;
+      this.pollRegistrations(suseManagerLink, cluster);
+      this.registrationsPollId = setInterval(() => this.pollRegistrations(suseManagerLink, cluster), REGISTRATIONS_POLL_MS);
+    },
+
+    stopRegistrationsPoll() {
+      if (this.registrationsPollId !== null) {
+        clearInterval(this.registrationsPollId);
+        this.registrationsPollId = null;
+      }
+    },
+
+    async pollRegistrations(suseManagerLink, cluster) {
+      const [suseManagerId, systemGroupName] = suseManagerLink.split('/');
+
+      if (!suseManagerId || !systemGroupName) {
+        return;
+      }
+
+      try {
+        const data = await sumaListRegistrations(this.$store, suseManagerId, systemGroupName);
+        const activeBefore = this.lastRunningCount;
+        const activeNow = (data?.summary?.pending || 0) + (data?.summary?.running || 0);
+
+        this.registrations = data;
+        this.lastRunningCount = activeNow;
+
+        // When registrations transition from "in flight" to "all done", refresh
+        // the cached systems list so patches / group membership reflect the
+        // newly-registered nodes without a page reload.
+        if (activeBefore > 0 && activeNow === 0 && cluster?.status?.clusterName) {
+          this.$store.dispatch('suma/fetchSumaSystemsList', {
+            store:       this.$store,
+            suseManagerLink,
+            clusterName: cluster.status.clusterName,
+            cluster,
+          });
+        }
+      } catch (e) {
+        // Poll is best-effort — swallow errors so a transient proxy blip
+        // doesn't blow up the panel.
+        console.error('[suma] pollRegistrations failed', e); // eslint-disable-line no-console
+      }
+    },
   }
 };
 </script>
@@ -239,6 +332,28 @@ export default {
         </a>
       </div>
     </div>
+    <Banner
+      v-if="isCluster && activeRegistrationCount > 0"
+      class="registration-banner"
+      color="info"
+    >
+      <div class="registration-busy">
+        <i class="icon icon-spinner icon-spin" />
+        Registering {{ activeRegistrationCount }} {{ activeRegistrationCount === 1 ? 'node' : 'nodes' }} with SUSE Multi-Linux Manager
+        <span v-if="registrationsSummary?.done">— {{ registrationsSummary.done }} done</span><span v-if="registrationsSummary?.failed">, {{ registrationsSummary.failed }} failed</span>
+      </div>
+    </Banner>
+    <Banner
+      v-else-if="isCluster && recentRegistrationFailures.length > 0"
+      class="registration-banner"
+      color="warning"
+    >
+      {{ recentRegistrationFailures.length }} recent node
+      {{ recentRegistrationFailures.length === 1 ? 'registration' : 'registrations' }} failed.
+      <span v-for="(f, i) in recentRegistrationFailures" :key="f.nodeId || i" class="failure-detail">
+        {{ f.nodeName }}: {{ f.message }}<span v-if="i < recentRegistrationFailures.length - 1">;</span>
+      </span>
+    </Banner>
     <div
       class="suma-detail"
       v-if="total"
@@ -303,6 +418,24 @@ export default {
 
     > div {
       margin-left: 8px;
+    }
+  }
+
+  .registration-banner {
+    margin-top: 10px;
+
+    .registration-busy {
+      align-items: center;
+      display: flex;
+      line-height: 1;
+    }
+
+    i.icon-spinner {
+      margin-right: 6px;
+    }
+
+    .failure-detail {
+      margin-right: 4px;
     }
   }
 

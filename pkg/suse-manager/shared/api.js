@@ -74,6 +74,25 @@ export async function pingProxy(store) {
   }
 }
 
+// Hit an /extension/* endpoint on the proxy (backed by our Go handlers,
+// not proxied on to MLM). suseManagerID is the resource name only, e.g. "prod-mlm".
+async function extensionRequest(store, suseManagerID, path, method = 'get', data) {
+  const baseUrl = '/api/v1/namespaces/suse-manager/services/https:suse-manager-rancher-proxy:5443/proxy';
+  const url = `${ baseUrl }${ path }`;
+
+  return store.dispatch('management/request', {
+    url,
+    method,
+    data,
+    headers: {
+      'Content-Type':              'application/json',
+      'X-Api-Suse-Manager-Target': suseManagerID,
+    },
+    responseType:         'json',
+    redirectUnauthorized: false,
+  }, { root: true });
+}
+
 async function proxyRequest(store, suseManagerLink, url, method = 'get', data) {
   const p = suseManagerLink.split('/');
   const baseUrl = '/api/v1/namespaces/suse-manager/services/https:suse-manager-rancher-proxy:5443/proxy/'
@@ -209,6 +228,25 @@ export async function sumaListAllGroups(store, suseManagerLink) {
   return groups.data?.result || [];
 }
 
+/**
+ * SUMA systemgroup.create - create a new system group.
+ */
+export async function sumaCreateSystemGroup(store, suseManagerID, name, description) {
+  const body = { name, description: description ?? name };
+
+  const response = await proxyRequest(store, suseManagerID, '/systemgroup/create', 'post', body);
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to create system group');
+  }
+
+  if (response.data && response.data.success === false) {
+    throw new Error(response.data.message || 'Unable to create system group');
+  }
+
+  return response.data?.result;
+}
+
 export async function sumaGetSystemsInSystemGroup(store, suseManagerID, groupName) {
     try {
       const sumaSystems = await sumaListGroupSystems(store, suseManagerID, groupName);
@@ -341,6 +379,25 @@ export async function sumaListActivationKeys(store, suseManagerID) {
 
   if (isError(response)) {
     throw new Error(response.message || 'Unable to list activation keys');
+  }
+
+  return response.data?.result || [];
+}
+
+/**
+ * SUMA system.getNetworkForSystems - returns [{ system_id, hostname, ip, ip6 }, ...]
+ */
+export async function sumaGetNetworkForSystems(store, suseManagerID, sids) {
+  const ids = (sids || []).map((s) => Number(s));
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const response = await proxyRequest(store, suseManagerID, `/system/getNetworkForSystems?sids=${ ids.join(',') }`);
+
+  if (isError(response)) {
+    throw new Error(response.message || 'Unable to fetch network info for systems');
   }
 
   return response.data?.result || [];
@@ -647,4 +704,37 @@ export async function sumaListFailedActions(store, suseManagerID) {
   const response = await proxyRequest(store, suseManagerID, '/schedule/listFailedActions');
 
   return response.data?.result || [];
+}
+
+/**
+ * Extension backend: enqueue a batch of nodes to be bootstrapped in the
+ * background. The proxy immediately returns { batchId, accepted } and then
+ * bootstraps each node, adds it to the system group, and updates its own
+ * queue. Poll sumaListRegistrations() to observe progress.
+ *
+ * Each entry in `nodes` needs: nodeId, nodeName, host, ips[], sshUser,
+ * sshPort, sshPrivKey, sshPrivKeyPass?, saltSSH.
+ */
+export async function sumaSubmitRegistrations(store, suseManagerID, { systemGroupName, activationKey, nodes }) {
+  const response = await extensionRequest(store, suseManagerID, '/extension/registrations', 'post', {
+    systemGroupName,
+    activationKey,
+    nodes,
+  });
+
+  return response.data || {};
+}
+
+/**
+ * Extension backend: fetch registration queue state for a system group.
+ * Returns { summary: { pending, running, done, failed, total }, items: [...] }.
+ */
+export async function sumaListRegistrations(store, suseManagerID, systemGroupName) {
+  const response = await extensionRequest(
+    store,
+    suseManagerID,
+    `/extension/registrations?systemGroup=${ encodeURIComponent(systemGroupName) }`,
+  );
+
+  return response.data || { summary: { pending: 0, running: 0, done: 0, failed: 0, total: 0 }, items: [] };
 }

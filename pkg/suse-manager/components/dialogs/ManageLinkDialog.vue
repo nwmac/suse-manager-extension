@@ -1,9 +1,11 @@
 <script>
 import AsyncButton from '@shell/components/AsyncButton';
 import Banner from '@components/Banner/Banner.vue';
+import Checkbox from '@components/Form/Checkbox/Checkbox.vue';
+import { LabeledInput } from '@components/Form/LabeledInput';
 import LabeledSelect from '@shell/components/form/LabeledSelect';
 import { SUSE_MANAGER_LINK_ANNOTATION, SUMA_SERVER_RESOURCE_NAME } from '../../shared/definitions';
-import { sumaListAllGroups } from '../../shared/api';
+import { sumaCreateSystemGroup, sumaListAllGroups } from '../../shared/api';
 
 export default {
   name: 'SuseManagerManageLinkDialog',
@@ -11,9 +13,9 @@ export default {
   components: {
     AsyncButton,
     Banner,
+    Checkbox,
+    LabeledInput,
     LabeledSelect
-    // LabeledSelect,
-    // AppModal,
   },
 
   props: {
@@ -48,10 +50,14 @@ export default {
   },
 
   data() {
+    const clusterName = this.resources?.[0]?.metadata?.name || '';
+
     return {
       busy:                false,
       loadingSystemGroups: false,
       suseManagerId:       '',
+      createNewGroup:      true,
+      newGroupName:        clusterName,
       systemGroup:         '',
       suseManagerOptions:  [],
       systemGroupOptions:  [],
@@ -61,16 +67,11 @@ export default {
 
   computed: {
     valid() {
-      return this.suseManagerId && this.systemGroup;
-    },
+      if (!this.suseManagerId) {
+        return false;
+      }
 
-    __suseManagerOptions() {
-      return [
-        {
-          label: 'Test 1',
-          value: 'test1'
-        }
-      ]
+      return this.createNewGroup ? !!this.newGroupName?.trim() : !!this.systemGroup;
     },
   },
 
@@ -82,46 +83,77 @@ export default {
     async saveLink(buttonDone) {
       // Grey out the form fields and the cancel button while we are saving
       this.busy = true;
+      this.error = undefined;
 
-      if (this.resources.length === 1) {
-        // Need to edit the annotation on the provisioning cluster rather than the management cluster
-        const cluster = this.resources[0].provCluster;
-
-        cluster.setAnnotation(SUSE_MANAGER_LINK_ANNOTATION, `${ this.suseManagerId }/${ this.systemGroup }`);
-
-        const save = await cluster.save();
-
-        // TODO: Check the response
-
-        console.error(save);
-
-        buttonDone(true);
-        this.$emit('close', true);
-      } else {
+      if (this.resources.length !== 1) {
         this.error = 'Only expecting a single resource';
         this.busy = false;
         buttonDone(false);
+
+        return;
       }
+
+      let groupName;
+
+      if (this.createNewGroup) {
+        groupName = this.newGroupName.trim();
+
+        try {
+          await sumaCreateSystemGroup(this.$store, this.suseManagerId, groupName);
+        } catch (e) {
+          this.error = e?.message || 'Unable to create system group';
+          this.busy = false;
+          buttonDone(false);
+
+          return;
+        }
+      } else {
+        groupName = this.systemGroup;
+      }
+
+      // The action is registered against provisioning.cattle.io.cluster, so
+      // resources[0] is already the provisioning cluster we need to annotate.
+      const cluster = this.resources[0];
+
+      cluster.setAnnotation(SUSE_MANAGER_LINK_ANNOTATION, `${ this.suseManagerId }/${ groupName }`);
+
+      try {
+        await cluster.save();
+      } catch (e) {
+        this.error = e?.message || 'Unable to save cluster annotation';
+        this.busy = false;
+        buttonDone(false);
+
+        return;
+      }
+
+      buttonDone(true);
+      this.$emit('close', true);
     },
 
-    async suseManagerChanged(v) {
-      console.error('SUSE MANAGER CHANGED');
-
+    async suseManagerChanged() {
       // Clear the system groups
       this.systemGroupOptions = [];
       this.error = undefined;
       // Reset the selected system group
       this.systemGroup = '';
 
-      console.log(this);
-      console.log(this.suseManagerId);
+      if (this.createNewGroup) {
+        return;
+      }
 
-      // Fetch the system groups for the SUSE Manager Server
+      await this.loadSystemGroups();
+    },
+
+    async loadSystemGroups() {
+      if (!this.suseManagerId) {
+        return;
+      }
+
       this.loadingSystemGroups = true;
       try {
         const groups = await sumaListAllGroups(this.$store, this.suseManagerId);
 
-        console.log(groups);
         this.systemGroupOptions = groups.map((g) => {
           return {
             label: `${ g.name } - ${ g.description }`,
@@ -132,6 +164,14 @@ export default {
         this.error = 'Unable to fetch system groups from the SUSE Multi-Linux Manager server';
       } finally {
         this.loadingSystemGroups = false;
+      }
+    },
+
+    async onCreateNewGroupChanged(val) {
+      this.error = undefined;
+
+      if (!val && this.suseManagerId && this.systemGroupOptions.length === 0) {
+        await this.loadSystemGroups();
       }
     }
   }
@@ -151,24 +191,40 @@ export default {
         </p>
         <LabeledSelect
           v-model:value="suseManagerId"
-          label-key="plugins.install.version"
+          label="SUSE Multi-Linux Manager Server"
           :options="suseManagerOptions"
           :disabled="busy"
           class="version-selector mt-10"
-          data-testid="install-ext-modal-select-version"
+          data-testid="link-suma-modal-select-server"
           @selecting="suseManagerChanged"
         />
+        <Checkbox
+          v-model:value="createNewGroup"
+          class="version-selector mt-10"
+          label="Create a new System Group"
+          :disabled="busy"
+          data-testid="link-suma-modal-create-group-checkbox"
+          @update:value="onCreateNewGroupChanged"
+        />
+        <LabeledInput
+          v-if="createNewGroup"
+          v-model:value="newGroupName"
+          label="System Group"
+          :disabled="busy"
+          class="version-selector mt-10"
+          data-testid="link-suma-modal-new-group-name"
+        />
         <LabeledSelect
+          v-else
           v-model:value="systemGroup"
           label="System Group"
-          _label-key="plugins.install.version"
           :options="systemGroupOptions"
           :disabled="busy || systemGroupOptions.length === 0"
           class="version-selector mt-10"
-          data-testid="install-ext-modal-select-version"
+          data-testid="link-suma-modal-select-group"
         />
         <Banner
-          v-if="suseManagerId && !error && !loadingSystemGroups && systemGroupOptions.length === 0"
+          v-if="!createNewGroup && suseManagerId && !error && !loadingSystemGroups && systemGroupOptions.length === 0"
           color="error"
         >
           No system groups are available on the selected SUSE Multi-Linux Manager server.
@@ -191,7 +247,8 @@ export default {
         </button>
         <AsyncButton
           :disabled="!valid"
-          data-testid="install-ext-modal-install-btn"
+          action-label="Link"
+          data-testid="link-suma-modal-link-btn"
           @click="saveLink"
         />
       </div>

@@ -32,6 +32,12 @@ type LoginStatus struct {
 
 func handleProxyRequest(k8sApi, token string) func(w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		// Extension endpoints served by us directly, not proxied to MLM.
+		if strings.HasPrefix(req.URL.Path, "/extension/") {
+			handleExtensionRequest(k8sApi, token, w, req)
+			return
+		}
+
 		// Get the header with the target system
 		resourceName := req.Header.Get(API_HEADER)
 

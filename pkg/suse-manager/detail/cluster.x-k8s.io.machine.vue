@@ -132,6 +132,15 @@ export default {
         saveCb(false);
       }
     },
+
+    statusClass(status) {
+      switch (status) {
+      case 'Success': return 'success';
+      case 'Failed': return 'failed';
+      case 'Some Failures': return 'mixed';
+      default: return 'neutral';
+      }
+    },
   },
   mounted() {
     this.name = this.value.spec.displayName;
@@ -181,7 +190,22 @@ export default {
         let status = 'Pending';
 
         if (ev.completed_date) {
-          status = 'Completed';
+          // MLM reports the per-action success/failure tallies once the action
+          // has finished. Prefer those over a plain "Completed" so the row
+          // reflects the real outcome; fall back to "Completed" when neither
+          // count is present (older MLMs or actions with no outcome data).
+          const successful = Number(ev.successful_count) || 0;
+          const failed = Number(ev.failed_count) || 0;
+
+          if (successful > 0 && failed === 0) {
+            status = 'Success';
+          } else if (failed > 0 && successful === 0) {
+            status = 'Failed';
+          } else if (successful > 0 && failed > 0) {
+            status = 'Some Failures';
+          } else {
+            status = 'Completed';
+          }
         } else if (ev.pickup_date) {
           status = 'In Progress';
         }
@@ -264,6 +288,11 @@ export default {
           key-field="id"
           default-sort-by="created"
         >
+          <template #cell:status="{ row }">
+            <span :class="['event-status', `event-status-${ statusClass(row.status) }`]">
+              {{ row.status }}
+            </span>
+          </template>
           <template #cell:actions="{ row }">
             <a
               v-if="row.eventUrl"
@@ -291,5 +320,11 @@ export default {
     text-decoration: none;
     opacity: 0.8;
   }
+}
+
+.event-status {
+  &-success { color: var(--success); }
+  &-failed  { color: var(--error); }
+  &-mixed   { color: var(--warning); }
 }
 </style>

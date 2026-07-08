@@ -8,16 +8,15 @@ import { SUSE_MANAGER_LINK_ANNOTATION } from '../../shared/definitions';
 import {
   sumaGetSystemsInSystemGroup,
   sumaListActivationKeys,
-  sumaBootstrapSystem,
   fetchMachineSshConfig,
+  sumaSubmitRegistrations,
+  sumaListRegistrations,
 } from '../../shared/api';
 
 const STATUS_REGISTERED = 'registered';
 const STATUS_NOT_REGISTERED = 'not-registered';
 const STATUS_UNAVAILABLE = 'unavailable';
-const STATUS_PENDING = 'pending';
-const STATUS_RUNNING = 'running';
-const STATUS_SUCCESS = 'success';
+const STATUS_IN_PROGRESS = 'in-progress';
 const STATUS_ERROR = 'error';
 
 export default {
@@ -109,10 +108,17 @@ export default {
           sumaSystemId:   matched?.id,
           sumaSystemName: matched?.profile_name || matched?.name,
           status,
-          selected:       false,
+          // Pre-check nodes that aren't already in the linked system group
+          // so the user can register everything in one click.
+          selected:       status === STATUS_NOT_REGISTERED,
           message:        '',
         };
       });
+
+      // Default to the first available activation key so registration is a single click.
+      if (!this.activationKey) {
+        this.activationKey = this.activationKeyOptions[0]?.value || '';
+      }
     } catch (e) {
       this.loadError = e?.message || 'Unable to load cluster nodes or SUSE Manager systems.';
     }
@@ -167,9 +173,7 @@ export default {
       case STATUS_REGISTERED: return `Registered${ row.sumaSystemName ? ` — ${ row.sumaSystemName }` : '' }`;
       case STATUS_NOT_REGISTERED: return 'Not registered';
       case STATUS_UNAVAILABLE: return 'SSH keys unavailable';
-      case STATUS_PENDING: return 'Pending…';
-      case STATUS_RUNNING: return 'Registering…';
-      case STATUS_SUCCESS: return 'Registered';
+      case STATUS_IN_PROGRESS: return row.message ? row.message : 'Registering…';
       case STATUS_ERROR: return `Failed: ${ row.message || 'Unknown error' }`;
       default: return row.status;
       }
@@ -178,12 +182,10 @@ export default {
     statusClass(row) {
       switch (row.status) {
       case STATUS_REGISTERED:
-      case STATUS_SUCCESS:
         return 'status-success';
       case STATUS_ERROR:
         return 'status-error';
-      case STATUS_RUNNING:
-      case STATUS_PENDING:
+      case STATUS_IN_PROGRESS:
         return 'status-progress';
       case STATUS_UNAVAILABLE:
         return 'status-warning';
@@ -197,84 +199,84 @@ export default {
       this.registerError = undefined;
 
       const toRegister = this.selectedRows.slice();
+      const nodes = [];
+      const gatherErrors = [];
 
-      toRegister.forEach((r) => {
-        r.status = STATUS_PENDING;
-        r.message = '';
-      });
-
+      // We read each machine's SSH bundle here — the browser has the Rancher
+      // session cookie that authorises the sshkeys link download, so the proxy
+      // can't do this itself. The bundle contents (user/port/key) are then
+      // shipped along with the batch for the backend worker to consume.
       for (const row of toRegister) {
-        row.status = STATUS_RUNNING;
-
-        console.log('[suma] runRegistration: starting row', { id: row.id, name: row.name, rancherInternalIp: row.ip });
+        row.status = STATUS_IN_PROGRESS;
+        row.message = 'Preparing…';
 
         try {
           const ssh = await fetchMachineSshConfig(row.machine);
-
-          // Per the user: prefer the SSH bundle's own config.json IPAddress
-          // (Rancher uses this address itself to SSH the node) over the
-          // Rancher CAPI internalIp.
           const host = ssh.host || ssh.ipv6 || row.ip;
-
-          console.log('[suma] runRegistration: using host=%s user=%s port=%d for %s', host, ssh.user, ssh.port, row.name);
 
           if (!host) {
             throw new Error('No reachable IP address (config.json had no IPAddress/IPv6Address and Rancher had no internalIp)');
           }
-
           if (!ssh.user) {
             throw new Error('SSH bundle config.json did not include SSHUser');
           }
 
-          await sumaBootstrapSystem(this.$store, this.suseManagerId, {
+          nodes.push({
+            nodeId:         row.id,
+            nodeName:       row.name,
             host,
-            sshPort:        ssh.port,
+            ips:            row.ips,
+            sshPort:        ssh.port || 22,
             sshUser:        ssh.user,
             sshPrivKey:     ssh.privateKey,
             sshPrivKeyPass: '',
-            activationKey:  this.activationKey,
+            saltSSH:        true,
           });
-
-          console.log('[suma] runRegistration: bootstrap succeeded for', row.name);
-
-          row.status = STATUS_SUCCESS;
-          row.message = '';
         } catch (e) {
-          console.error('[suma] runRegistration: failed for', row.name, e);
+          console.error('[suma] runRegistration: failed to prepare row', row.name, e);
           row.status = STATUS_ERROR;
-          row.message = e?.message || 'Bootstrap failed';
+          row.message = e?.message || 'Unable to read SSH bundle';
+          gatherErrors.push(`${ row.name }: ${ row.message }`);
         }
       }
 
-      // Refresh the group's systems and re-match by IP so successful
-      // registrations flip to "Registered" with their SUMA system info.
+      if (nodes.length === 0) {
+        this.registerError = `Unable to prepare any nodes for registration. ${ gatherErrors.join('; ') }`;
+        this.registering = false;
+        buttonDone(false);
+
+        return;
+      }
+
       try {
-        const refreshed = await sumaGetSystemsInSystemGroup(this.$store, this.suseManagerId, this.systemGroupName);
-        const systems = Array.isArray(refreshed) ? refreshed : [];
-
-        for (const row of this.rows) {
-          if (row.status === STATUS_SUCCESS || row.status === STATUS_REGISTERED) {
-            const match = systems.find((s) => row.ips.includes(s.network?.ip));
-
-            if (match) {
-              row.sumaSystemId = match.id;
-              row.sumaSystemName = match.profile_name || match.name;
-              row.status = STATUS_REGISTERED;
-              row.selected = false;
-            } else if (row.status === STATUS_SUCCESS) {
-              row.message = 'Registered. Not yet visible in linked group — verify the activation key includes this group.';
-            }
+        await sumaSubmitRegistrations(this.$store, this.suseManagerId, {
+          systemGroupName: this.systemGroupName,
+          activationKey:   this.activationKey,
+          nodes,
+        });
+      } catch (e) {
+        console.error('[suma] runRegistration: submit failed', e);
+        this.registerError = `Unable to submit registration batch: ${ e?.message || e }`;
+        // Roll back the progress state we set above for rows we successfully
+        // gathered SSH keys for, so the user can retry.
+        for (const row of toRegister) {
+          if (row.status === STATUS_IN_PROGRESS) {
+            row.status = STATUS_NOT_REGISTERED;
+            row.message = '';
           }
         }
-      } catch (e) {
-        this.registerError = `Registrations completed but unable to refresh group membership: ${ e?.message || e }`;
+        this.registering = false;
+        buttonDone(false);
+
+        return;
       }
 
       this.registering = false;
+      buttonDone(true);
 
-      const hadError = this.rows.some((r) => r.status === STATUS_ERROR);
-
-      buttonDone(!hadError);
+      // The backend now owns the long-running bootstrap; hand off to the poll
+      // banner on the cluster page and close.
+      setTimeout(() => this.closeDialog(true), 400);
     },
   },
 };
@@ -349,7 +351,7 @@ export default {
               <td>{{ row.ip || '—' }}</td>
               <td :class="statusClass(row)">
                 <i
-                  v-if="row.status === 'running'"
+                  v-if="row.status === 'in-progress'"
                   class="icon icon-spinner icon-spin"
                 />
                 {{ statusLabel(row) }}
