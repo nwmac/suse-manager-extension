@@ -28,7 +28,12 @@ const sumaFactory = (): CoreStoreSpecifics => {
         loadingStatus: {},
 
         // Actions in progress - a map from a SUSE Manager ID to an array of action metadata
-        actions: {}
+        actions: {},
+
+        // Monotonic counter bumped after a patch apply completes; patch tables
+        // watch this so they can clear their selection once patches have been
+        // scheduled without needing a direct component ref from the resource layer.
+        patchSelectionClearTick: 0,
       };
     },
 

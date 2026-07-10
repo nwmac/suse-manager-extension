@@ -1,4 +1,5 @@
 import { SystemGroupActions, SystemGroup, SystemGroupLoadingStatus } from '../../shared/definitions';
+import { isPatchRelevantAction } from '../../shared/utils';
 
 const NOTIFICATION_TIMEOUT = 5000;
 
@@ -14,7 +15,7 @@ export default {
    */
   updateSystemEventsList(state: any, data: any) {
     const { sid, systemEvents, suseManagerId } = data;
-    const eventsInProgress = (systemEvents || []).filter((ev: any) => ev.created_date && !ev.completed_date);
+    const eventsInProgress = (systemEvents || []).filter((ev: any) => ev.created_date && !ev.completed_date && isPatchRelevantAction(ev));
 
     const nextGroups = { ...state.systemGroups };
     let updated = false;
@@ -45,6 +46,10 @@ export default {
     if (updated) {
       state.systemGroups = nextGroups;
     }
+  },
+
+  bumpPatchSelectionClear(state: any) {
+    state.patchSelectionClearTick = (state.patchSelectionClearTick || 0) + 1;
   },
 
   updateNotifications(state: any, notification: any) {

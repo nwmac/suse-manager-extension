@@ -26,6 +26,11 @@ export default {
       // observed in-progress during the current session. Retained so we can
       // format the outcome message after the batch drains, then cleared.
       sessionActions: {},
+      // Ids of actions that were already in-progress the first time the watcher
+      // fired for this panel instance. Excluded from sessionActions so the
+      // outcome message only counts actions the user initiated from this page —
+      // not stale in-progress work from a previous session/tab/user.
+      baselineActionIds: null,
       // The last non-empty relevantActions we saw. Held on-screen while we
       // wait for SUMA to surface completed / failed outcomes so the panel
       // doesn't blink to empty between the in-progress banner disappearing
@@ -190,15 +195,48 @@ export default {
       }
 
       this.pendingOutcome = false;
+      this.baselineActionIds = null;
 
-      // Refresh systems so the applied patches drop out of the upgradable list.
+      // Refresh the systems list so applied patches drop out of the upgradable
+      // count. SUMA's /system/getRelevantErrata is not updated until the target
+      // system checks back in with the new package state, which can take from
+      // a few seconds to ~a minute after the action completes. Snapshot the
+      // total upgradable count now, then poll with backoff and stop as soon as
+      // the count actually changes so we don't spin forever.
       const clusterName = this.suseManagerLink.split('/')[1];
+      const baseline = this.totalUpgradablePatchCount();
+      const delays = [0, 5000, 10000, 20000, 30000, 60000];
 
-      this.$store.dispatch('suma/fetchSumaSystemsList', {
-        store:           this.$store,
-        suseManagerLink: this.suseManagerLink,
-        clusterName,
-      });
+      for (const delay of delays) {
+        if (delay) {
+          await new Promise((r) => setTimeout(r, delay));
+        }
+
+        if (this._destroyed) {
+          return;
+        }
+
+        await this.$store.dispatch('suma/fetchSumaSystemsList', {
+          store:           this.$store,
+          suseManagerLink: this.suseManagerLink,
+          clusterName,
+        });
+
+        if (this.totalUpgradablePatchCount() !== baseline) {
+          return;
+        }
+      }
+    },
+
+    /**
+     * Sum of listLatestUpgradablePackages across every system in the group
+     * backing this cluster. Used as a change-detection signal after a patch
+     * action so we can stop polling SUMA once the count actually moves.
+     */
+    totalUpgradablePatchCount() {
+      const systems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink) || [];
+
+      return systems.reduce((sum, s) => sum + (s?.listLatestUpgradablePackages?.length || 0), 0);
     },
 
     async updateEventsInProgress() {
@@ -232,6 +270,7 @@ export default {
   },
 
   beforeDestroy() {
+    this._destroyed = true;
     if (this.poolingInterval) {
       clearInterval(this.poolingInterval);
     }
@@ -243,13 +282,29 @@ export default {
         const hasNew = neu && neu.length;
         const hadOld = old && old.length;
 
+        // On the first watcher fire, remember any actions already in-progress —
+        // they belong to some earlier session (previous nav, another tab, another
+        // user) and would otherwise inflate this session's "N applied" outcome.
+        if (this.baselineActionIds === null) {
+          this.baselineActionIds = new Set(
+            (neu || [])
+              .map((ev) => (ev?.id !== undefined && ev?.id !== null ? String(ev.id) : null))
+              .filter((id) => id !== null)
+          );
+        }
+
         // Accumulate a snapshot of every action seen in-progress during the
         // running session so we can format the outcome message once the
         // batch drains (SUMA's completed / failed action listings don't
         // include per-system fields like profile_name).
         (neu || []).forEach((ev) => {
           if (ev?.id !== undefined && ev?.id !== null) {
-            this.sessionActions[String(ev.id)] = {
+            const idStr = String(ev.id);
+
+            if (this.baselineActionIds.has(idStr)) {
+              return;
+            }
+            this.sessionActions[idStr] = {
               action_type:  ev.action_type,
               profile_name: ev.profile_name,
               name:         ev.name,
@@ -272,7 +327,10 @@ export default {
 
         // Session ended — no more in-progress actions. Kick off the finalize
         // flow which keeps the panel visible until we can report an outcome.
-        if (hadOld && !hasNew && this.suseManagerLink) {
+        // Skip when nothing was tracked in sessionActions (e.g. only baseline
+        // actions drained), otherwise we'd poll SUMA for an outcome we have
+        // no ids to match against.
+        if (hadOld && !hasNew && this.suseManagerLink && Object.keys(this.sessionActions).length > 0) {
           this.finalizeSession();
         }
       },

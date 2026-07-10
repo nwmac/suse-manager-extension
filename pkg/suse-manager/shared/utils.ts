@@ -90,6 +90,19 @@ export function stripEmptyMoreSuffix(name: string): string {
 }
 
 /**
+ * Applying an errata usually triggers a follow-on "Package List Refresh"
+ * action on the target system. It's not a patch action, so we exclude it from
+ * the in-progress notification panel and the finalize/outcome flow — the
+ * banner would otherwise flip from "Applying patch…" to "Package List
+ * Refresh…" and never reach a clean "N applied" completion state.
+ */
+export function isPatchRelevantAction(ev: any): boolean {
+  const type = (ev?.action_type || '').toLowerCase();
+
+  return !type.includes('package list refresh');
+}
+
+/**
  * Format a SUMA action / event into the single-line "- action_type on
  * profile_name => name" display we use across the notification panel and
  * completion summaries.

@@ -17,7 +17,7 @@ import {
 } from '../../shared/api';
 import SumaPatches from '../../models/crd.sumapatches';
 
-import { processError, processPatch, sumaSystemForNode, formatActionLine } from '../../shared/utils';
+import { processError, processPatch, sumaSystemForNode, formatActionLine, isPatchRelevantAction } from '../../shared/utils';
 
 async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: string, sumaGroup: string, sumaSystem: any, fetchSumaEvents = true) {
   const sid = sumaSystem?.id;
@@ -90,8 +90,9 @@ async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: stri
   // filtered, enriched view used by the in-progress notification panel.
   updatedSumaSystem.allEvents = sumaEvents;
 
-  // get only ongoing system events
-  const eventsInProgress = sumaEvents.filter((ev: any) => ev.created_date && !ev.completed_date);
+  // get only ongoing system events, skipping SUMA's Package List Refresh
+  // follow-on so the notification banner tracks the patch action itself.
+  const eventsInProgress = sumaEvents.filter((ev: any) => ev.created_date && !ev.completed_date && isPatchRelevantAction(ev));
   const events = eventsInProgress.map((ev: any) => {
     return {
       ...ev,

@@ -1,6 +1,4 @@
 <script>
-import { groupPatches } from '../shared/utils';
-import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 import Banner from '@components/Banner/Banner.vue';
 
 export default {
@@ -24,60 +22,6 @@ export default {
     hasSystem() {
       // `system` prop defaults to {} — treat "empty" as no matching MLM system
       return !!(this.system && this.system.id);
-    },
-
-    patchSummary() {
-      return this.system ? groupPatches(this.system) : { total: 0, security: 0 };
-    },
-
-    securityPatches() {
-      return this.patchSummary?.security || 0;
-    },
-
-    totalPatches() {
-      return this.patchSummary?.total || 0;
-    },
-
-    rebootRequired() {
-      return !!this.system?.reboot_required;
-    },
-
-    /**
-     * MLM base URL for this system, taken from the SumaServer resource we
-     * loaded via SumaPanel's fetch. Used to build deep-links into the MLM UI.
-     */
-    mlmBaseUrl() {
-      const id = this.system?.suseManagerId;
-
-      if (!id) {
-        return '';
-      }
-
-      const server = this.$store.getters['management/byId'](SUMA_SERVER_RESOURCE_NAME, `${ SUSE_MANAGER_NAMESPACE }/${ id }`);
-
-      return server?.spec?.url || '';
-    },
-
-    /**
-     * Deep-link to this system's errata (patch) list in the MLM UI.
-     */
-    errataListUrl() {
-      if (!this.mlmBaseUrl || !this.system?.id) {
-        return '';
-      }
-
-      return `${ this.mlmBaseUrl }/rhn/systems/details/ErrataList.do?sid=${ this.system.id }`;
-    },
-
-    /**
-     * Deep-link to this system's upgradable packages list in the MLM UI.
-     */
-    upgradablePackagesUrl() {
-      if (!this.mlmBaseUrl || !this.system?.id) {
-        return '';
-      }
-
-      return `${ this.mlmBaseUrl }/rhn/systems/details/packages/UpgradableList.do?sid=${ this.system.id }`;
     },
 
     baseChannelLabel() {
@@ -173,22 +117,6 @@ export default {
   },
 
   methods: {
-    openRebootDialog() {
-      if (!this.system?.suseManagerId || !this.system?.id) {
-        return;
-      }
-
-      this.$store.dispatch('cluster/promptModal', {
-        componentProps: {
-          sid:           this.system.id,
-          suseManagerId: this.system.suseManagerId,
-          systemName:    this.system.profile_name || this.system.hostname || '',
-        },
-        component:  'SuseManagerRebootDialog',
-        modalWidth: '450px',
-      });
-    },
-
     formatDate(value) {
       if (!value) {
         return null;
@@ -218,44 +146,6 @@ export default {
     </div>
 
     <template v-else>
-      <!-- System Status banner -->
-      <section class="card status-card">
-        <header class="card-header">
-          <h3>System Status</h3>
-        </header>
-        <div class="card-body status-body">
-          <div class="status-line" v-if="totalPatches > 0 || rebootRequired">
-            <template v-if="totalPatches > 0">
-              <span class="label">Software Updates Available</span>
-              <a
-                v-if="securityPatches > 0"
-                class="stat"
-                :href="errataListUrl || undefined"
-                :target="errataListUrl ? '_blank' : undefined"
-              >Security: {{ securityPatches }}</a>
-              <a
-                class="stat"
-                :href="upgradablePackagesUrl || undefined"
-                :target="upgradablePackagesUrl ? '_blank' : undefined"
-              >Packages: {{ totalPatches }}</a>
-            </template>
-            <a
-              v-if="rebootRequired"
-              class="reboot-note"
-              role="button"
-              @click.prevent="openRebootDialog"
-            >
-              <i class="icon icon-refresh status-icon" />
-              The system requires a reboot
-            </a>
-          </div>
-          <div class="status-line" v-if="totalPatches === 0 && !rebootRequired">
-            <i class="icon icon-checkmark status-icon ok" />
-            <span>System is up to date</span>
-          </div>
-        </div>
-      </section>
-
       <div class="grid">
         <!-- Left column -->
         <div class="col">
@@ -420,56 +310,6 @@ export default {
 
   .card-body {
     padding: 12px 16px;
-  }
-
-  .status-card .card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .status-line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-
-    .status-icon {
-      &.updates {
-        color: var(--error);
-      }
-
-      &.ok {
-        color: var(--success);
-      }
-    }
-
-    .label {
-      margin-right: 4px;
-    }
-
-    .stat {
-      color: var(--link);
-      cursor: pointer;
-      margin-right: 12px;
-
-      &:hover {
-        text-decoration: underline;
-      }
-    }
-
-    .reboot-note {
-      margin-left: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--link);
-      cursor: pointer;
-
-      &:hover {
-        text-decoration: underline;
-      }
-    }
   }
 
   .info-list {

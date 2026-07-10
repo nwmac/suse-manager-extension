@@ -149,7 +149,17 @@ export default {
       }
 
       return loading?.loading;
-    }
+    },
+
+    patchSelectionClearTick() {
+      return this.$store.getters['suma/getPatchSelectionClearTick'];
+    },
+  },
+
+  watch: {
+    patchSelectionClearTick() {
+      this.$refs.patchTable?.clearSelection?.();
+    },
   },
 };
 </script>
@@ -199,10 +209,11 @@ export default {
         :weight="3"
       >
         <SortableTable
+          ref="patchTable"
           :loading="loadingPatchList"
           :headers="sumaPatchesHeaders"
           :rows="sumaPatches"
-          :table-actions="false"
+          :table-actions="true"
           :row-actions="true"
           default-sort-by="advisory-type"
         />

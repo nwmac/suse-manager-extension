@@ -51,6 +51,8 @@ export default {
     return state.count;
   },
 
+  getPatchSelectionClearTick: (state: any) => state.patchSelectionClearTick || 0,
+
   /**
    * Get system group by id
    */

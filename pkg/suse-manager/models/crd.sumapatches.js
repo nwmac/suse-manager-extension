@@ -5,10 +5,12 @@ import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/def
 export default class SumaPatches extends Resource {
   get availableActions() {
     const applyPatchAction = {
-      action:  'applySinglePatch',
-      enabled: this.sumaPatchActionEnabled,
-      icon:    'icon icon-play',
-      label:   this.t('suma.cluster-details.table-actions.patch-os-single')
+      action:     'applySinglePatch',
+      enabled:    this.sumaPatchActionEnabled,
+      icon:       'icon icon-play',
+      label:      this.t('suma.cluster-details.table-actions.patch-os-single'),
+      bulkable:   true,
+      bulkAction: 'applyPatches',
     };
 
     return [applyPatchAction];
@@ -22,7 +24,36 @@ export default class SumaPatches extends Resource {
         [this.suma.systemId],
         [this.id],
       );
+      this.store.commit('suma/bumpPatchSelectionClear');
     }
+  }
+
+  // Called by SortableTable when multiple patches are selected and the bulk
+  // action is triggered. All rows in a given patch table belong to the same
+  // SUMA system, so schedule them as a single errata action with N ids —
+  // SUMA's scheduleApplyErrata accepts an array of errataIds.
+  async applyPatches(patches) {
+    const first = patches?.[0]?.suma;
+
+    if (!first?.suseManagerId || !first?.systemId) {
+      return;
+    }
+
+    const errataIds = patches
+      .map((p) => p.id)
+      .filter((id) => id !== undefined && id !== null);
+
+    if (!errataIds.length) {
+      return;
+    }
+
+    await sumaScheduleApplyErrata(
+      this.store,
+      first.suseManagerId,
+      [first.systemId],
+      errataIds,
+    );
+    this.store.commit('suma/bumpPatchSelectionClear');
   }
 
   /**
