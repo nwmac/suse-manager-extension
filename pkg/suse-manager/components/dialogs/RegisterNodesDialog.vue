@@ -49,6 +49,7 @@ export default {
       rows:             [],
       activationKeys:   [],
       activationKey:    '',
+      saltSSH:          false,
       registering:      false,
       registerError:    undefined,
     };
@@ -230,7 +231,7 @@ export default {
             sshUser:        ssh.user,
             sshPrivKey:     ssh.privateKey,
             sshPrivKeyPass: '',
-            saltSSH:        true,
+            saltSSH:        this.saltSSH,
           });
         } catch (e) {
           console.error('[suma] runRegistration: failed to prepare row', row.name, e);
@@ -308,6 +309,13 @@ export default {
           :options="activationKeyOptions"
           :disabled="registering"
           :required="true"
+        />
+
+        <Checkbox
+          v-model:value="saltSSH"
+          class="mt-10"
+          label="Use Salt SSH"
+          :disabled="registering"
         />
 
         <h5 class="mt-20">
