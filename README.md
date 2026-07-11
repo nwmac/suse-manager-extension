@@ -57,7 +57,9 @@ From `proxy/`:
 
 ### Building and publishing the proxy image
 
-Unlike the UI extension, the proxy image is built and pushed manually — there is no GitHub Actions workflow for it. From `proxy/`:
+The proxy container image is still built and pushed manually — there is no GitHub Actions workflow for it. The proxy Helm **chart** is published automatically alongside the UI extension (see below).
+
+From `proxy/`:
 
 ```sh
 # Build locally and tag for a docker org (Docker Hub, ghcr.io, ...)
@@ -67,7 +69,7 @@ Unlike the UI extension, the proxy image is built and pushed manually — there 
 docker push <org>/suse-manager-rancher-proxy:latest
 ```
 
-To cut a versioned release:
+To cut a versioned image release:
 
 1. Bump `version` (and typically `appVersion`) in `proxy/helm/suse-manager-proxy/Chart.yaml`.
 2. Build the image with a versioned tag and push both `latest` and the version tag:
@@ -83,4 +85,6 @@ To cut a versioned release:
 3. Update the `image` field in `proxy/helm/suse-manager-proxy/templates/deployment.yaml` if the tag or org changed.
 4. Commit and push the chart / deployment changes.
 
-The Helm chart in `proxy/helm/suse-manager-proxy/` is installed manually into the target cluster (`helm install` / `helm upgrade`) — it is not published to a chart repository from CI.
+### Publishing the proxy Helm chart
+
+`build-extension.yml` also packages the proxy Helm chart at `proxy/helm/suse-manager-proxy/` and publishes it into the same `gh-pages` Helm repo as the UI extension — so both `suse-manager` and `suse-manager-proxy` appear in a single `index.yaml`. The workflow only re-publishes when the chart's `version` isn't already present in the published index, so you only need to bump `proxy/helm/suse-manager-proxy/Chart.yaml` when you actually want a new chart release, then push to `main` (typically via `yarn release`). No manual `helm repo index` step is required.

@@ -66,6 +66,64 @@ jobs:
         run: |
           yarn publish-pkgs -s "${{ github.repository }}" -b gh-pages
 
+      # Package the proxy Helm chart into the same tmp/ layout that
+      # publish-pkgs produces so the release job commits both charts to
+      # gh-pages in one go. Skipped when the chart version is already in the
+      # published Helm index — that's how "if it has changed" is detected.
+      - name: Package proxy Helm chart if new
+        id: proxy_pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHART_DIR=proxy/helm/suse-manager-proxy
+          NAME="$(yq eval '.name' "$CHART_DIR/Chart.yaml")"
+          VERSION="$(yq eval '.version' "$CHART_DIR/Chart.yaml")"
+
+          echo "Proxy chart: ${NAME}-${VERSION}"
+
+          # Fetch the currently-published Helm index. Missing file is fine —
+          # it just means gh-pages hasn't been initialised yet.
+          EXISTING_INDEX=/tmp/gh-pages-index.yaml
+          rm -f "$EXISTING_INDEX"
+          wget -qO "$EXISTING_INDEX" \
+            "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/index.yaml" || true
+
+          if [ -s "$EXISTING_INDEX" ] && \
+             yq eval ".entries[\"${NAME}\"][]? | select(.version == \"${VERSION}\") | .version" "$EXISTING_INDEX" \
+             | grep -qx "${VERSION}"; then
+            echo "Proxy chart ${NAME}-${VERSION} is already in the Helm index; nothing to publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Ensure the tmp/ layout exists even if publish-pkgs skipped it
+          # (extension had no version bump but proxy did).
+          mkdir -p "tmp/assets/${NAME}" "tmp/charts/${NAME}/${VERSION}" tmp/extensions
+
+          helm package "$CHART_DIR" -d "tmp/assets/${NAME}"
+          cp -R "$CHART_DIR/." "tmp/charts/${NAME}/${VERSION}/"
+
+          # Regenerate the top-level index.yaml with the proxy chart included.
+          # Prefer the extension-updated index emitted by publish-pkgs (already
+          # merged with prior gh-pages state); fall back to the raw gh-pages
+          # index if publish-pkgs didn't produce one this run.
+          MERGE_BASE=""
+          if [ -f tmp/index.yaml ]; then
+            MERGE_BASE="tmp/index.yaml"
+          elif [ -s "$EXISTING_INDEX" ]; then
+            MERGE_BASE="$EXISTING_INDEX"
+          fi
+
+          if [ -n "$MERGE_BASE" ]; then
+            helm repo index tmp/assets --url assets/ --merge "$MERGE_BASE"
+          else
+            helm repo index tmp/assets --url assets/
+          fi
+          mv tmp/assets/index.yaml tmp/index.yaml
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
       - name: Upload charts artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v3
