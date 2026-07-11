@@ -25,6 +25,7 @@
     "serve-pkgs": "./node_modules/@rancher/shell/scripts/serve-pkgs",
     "publish-pkgs": "./node_modules/@rancher/shell/scripts/extension/publish",
     "parse-tag-name": "./node_modules/@rancher/shell/scripts/extension/parse-tag-name",
-    "migrate": "node ./scrips/vue-migrate.js"
+    "migrate": "node ./scrips/vue-migrate.js",
+    "release": "./scripts/release-extension.sh"
   }
 }
