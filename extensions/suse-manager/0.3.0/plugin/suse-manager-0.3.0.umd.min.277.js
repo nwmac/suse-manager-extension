@@ -1,0 +1,2 @@
+"use strict";(("undefined"!==typeof self?self:this)["webpackChunksuse_manager_0_3_0"]=("undefined"!==typeof self?self:this)["webpackChunksuse_manager_0_3_0"]||[]).push([[277],{28277:function(e,n,s){s.r(n),s.d(n,{default:function(){return f}});var t=s(9274);function r(e,n,s,r,o,u){const a=(0,t.resolveComponent)("ResourceDetail");return(0,t.openBlock)(),(0,t.createBlock)(a)}var o=s(87486),u={name:"ClusterResourceNamespaceId",components:{ResourceDetail:o.A}},a=s(47433);const c=(0,a.A)(u,[["render",r]]);var f=c}}]);
+//# sourceMappingURL=suse-manager-0.3.0.umd.min.277.js.map
