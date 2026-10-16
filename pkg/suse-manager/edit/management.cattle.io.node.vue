@@ -34,9 +34,6 @@ export default {
     // we need this to populate the NORMAN node... getNorman
     await this.$store.dispatch('rancher/findAll', { type: NORMAN.NODE });
 
-    console.log(this.value);
-    console.log(this.value.mgmtClusterId);
-
     // For the SUMA Patches
     const mgmtCluster = await this.$store.dispatch('management/find', {
       type: MANAGEMENT.CLUSTER,
@@ -50,12 +47,9 @@ export default {
       opt:  { watch: false }
     });
 
-    const suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
-
-    console.error('NODE');
-    console.error(suseManagerLink);
-    this.suseManagerLink = suseManagerLink;
+    this.suseManagerLink = provCluster.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
   },
+  
   data() {
     return {
       suseManagerLink:    false,
@@ -126,21 +120,12 @@ export default {
       const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
       const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
 
-      console.error(sumaSystem);
-
       return sumaSystem;
     },
 
     sumaPatches() {
-      console.log(this);
-
       const sumaSystems = this.$store.getters['suma/getSystemGroup'](this.suseManagerLink);
-
-      console.log(sumaSystems);
-
       const sumaSystem = sumaSystemForNode(sumaSystems, this.value);
-
-      console.error(sumaSystem);
 
       // const sumaSystems = this.$store.getters['suma/getSumaSystems'];
       // const currSystem = sumaSystems.find(g => g?.profile_name === this.value.nameDisplay);
@@ -164,7 +149,17 @@ export default {
       }
 
       return loading?.loading;
-    }
+    },
+
+    patchSelectionClearTick() {
+      return this.$store.getters['suma/getPatchSelectionClearTick'];
+    },
+  },
+
+  watch: {
+    patchSelectionClearTick() {
+      this.$refs.patchTable?.clearSelection?.();
+    },
   },
 };
 </script>
@@ -179,9 +174,11 @@ export default {
     @finish="save"
   >
     <ResourceTabs
-      v-model="value"
+      :value="value"
+      :mode="mode"
       :need-related="false"
       :need-events="false"
+      @update:value="$emit('input', $event)"
     >
       <Tab
         name="node-edit"
@@ -212,10 +209,11 @@ export default {
         :weight="3"
       >
         <SortableTable
+          ref="patchTable"
           :loading="loadingPatchList"
           :headers="sumaPatchesHeaders"
           :rows="sumaPatches"
-          :table-actions="false"
+          :table-actions="true"
           :row-actions="true"
           default-sort-by="advisory-type"
         />

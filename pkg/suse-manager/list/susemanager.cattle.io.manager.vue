@@ -1,23 +1,31 @@
 <script>
 import ResourceTable from '@shell/components/ResourceTable';
 import ResourceFetch from '@shell/mixins/resource-fetch';
-import { CATALOG } from '@shell/config/types';
+import { CATALOG, SCHEMA } from '@shell/config/types';
 import Banner from '@components/Banner/Banner.vue';
+import Masthead from '@shell/components/ResourceList/Masthead';
+import ProxyStatus from '../components/ProxyStatus.vue';
+import { installHelmChart } from '../shared/utils';
 
 // If we add the Helm chart, this is the name we will use
 const HELM_REPOSITORY_NAME = 'suse-manager-proxy';
 
 // Helm repository URL
-const HELM_REPOSITORY_URL = 'https://charts.kubewarden.io';
+const HELM_REPOSITORY_URL = 'https://nwmac.github.io/suse-manager-extension';
 
 // Helm chart we will install from the repository
-const HELM_CHART_NAME = 'neil';
+const HELM_CHART_NAME = 'suse-manager-proxy';
 
 const SUMA_SERVER = 'susemanager.cattle.io.manager';
+
+// Route name Rancher uses for any resource detail page.
+const DETAIL_ROUTE_NAME = 'c-cluster-product-resource-namespace-id';
 
 export default {
   components: {
     Banner,
+    Masthead,
+    ProxyStatus,
     ResourceTable,
   },
   mixins:     [ResourceFetch],
@@ -27,23 +35,29 @@ export default {
     //   required: true,
     // },
 
-    schema: {
-      type:     Object,
-      required: false,
-    },
+    // schema: {
+    //   type:     Object,
+    //   required: false,
+    // },
   },
   data() {
+    console.error('--------');
+
+    console.error(this.$router);
+    console.error(this.$route);
+
     return {
       haveSchema:   false,
+      schema:       undefined,
       haveHelmRepo: false,
       repos:        [],
       versionInfo:  undefined,
       busy:         false,
       error:        '',
       resource:     SUMA_SERVER,
-
     };
   },
+
 
   async fetch() {
     const inStore = this.$store.getters['currentStore']();
@@ -53,8 +67,15 @@ export default {
     // const schema = this.$store.getters[`${ inStore }/schemaFor`](this.resource);
 
     this.haveSchema = !!schema;
+    this.schema = schema;
 
     console.error(this.haveSchema);
+
+    // If we do not have the schema, we are showing the install page, so do not show the masthead
+    // this.showMasthead = !this.haveSchema;
+    // console.log(this);
+    // console.log(this.schema);
+    // console.log(this.schema);
 
     // If we can not see the schema, then the proxy is either not installed or we don't have access
 
@@ -66,6 +87,27 @@ export default {
 
     if (schema) {
       await this.$fetchType(this.resource);
+
+      // If exactly one MLM server is configured and we arrived via the nav
+      // (route meta.skipList set on the virtualType in product.js), skip the
+      // list and drop the user straight into its detail page — one less
+      // click. Any other entry point (the "back to list" link from the
+      // detail masthead, direct URLs, etc.) doesn't set skipList, so the
+      // list renders normally.
+      if (this.$route.query?.skipList === 'true' && this.rows?.length === 1) {
+        const row = this.rows[0];
+
+        this.$router.replace({
+          name:   DETAIL_ROUTE_NAME,
+          params: {
+            resource:  this.resource,
+            namespace: row.metadata?.namespace,
+            id:        row.metadata?.name,
+          },
+        });
+
+        return;
+      }
     }
 
     // Check for the Helm Repository
@@ -82,14 +124,48 @@ export default {
     }
   },
 
+  // This is a hacky workaround
+  typeDisplay() {
+    const schema = this.$store.getters[`management/schemaFor`](this.resource);
+
+    this.showMasthead = !!schema;
+
+    return 'SUSE Multi-Linux Manager';
+  },
+
+  computed: {
+    resourceSchema() {
+      return this.$store.getters[`management/schemaFor`](this.resource);
+    },
+
+    allSchemas() {
+      return this.$store.getters[`management/all`](SCHEMA);
+    }
+  },
+
+  watch: {
+    allSchemas(neu, old) {
+      const n = neu?.find((s) => s.id === this.resource);
+
+      if ((!this.haveSchema && n) || (this.haveSchema && !n)) {
+        this.$router.replace({
+          name: 'c-cluster-manager-suse-manager',
+          path: '/c/:cluster/manager/suse-manager',
+          params: {
+            product: 'manager',
+            cluster: '_',
+          }
+        });
+      }
+    }
+  },
+
   methods: {
     async enable() {
       // TODO: Check permissions
 
       this.busy = true;
       this.error = '';
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Add the Helm repository, if it is not there
       if (!this.haveHelmRepo) {
@@ -121,8 +197,13 @@ export default {
 
         console.log('OK');
         console.log(this.versionInfo);
+        console.error('Installing ...');
 
-        this.busy = false;
+        const res = await installHelmChart(this.haveHelmRepo, this.versionInfo.chart, {});
+
+        console.error(res);
+
+        // this.busy = false;
 
         // Got the chart version info for the chart
       } catch (e) {
@@ -139,35 +220,37 @@ export default {
 
 <template>
   <div>
-    <ResourceTable
-      v-if="haveSchema"
-      :loading="loading"
-      :schema="schema"
-      :rows="rows"
-    />
-    <div v-else class="suma-install">
+    <div v-if="haveSchema">
+      <ProxyStatus />
+      <ResourceTable
+        :loading="loading"
+        :schema="schema"
+        :rows="rows"
+      />
+  </div>
+  <div v-else class="suma-install">
       <div class="suma-panel">
         <img src="../suma_icon.png" />
         <div>
-          <div class="title">Rancher SUSE Manager Integration</div>
+          <div class="title">Rancher SUSE Multi-Linux Manager Integration</div>
         </div>
       </div>
       <div class="suma-panel-indent">
-        <p>The Rancher SUSE Manager Extension Proxy is not installed.</p>
-        <p>This component is required in order for the UI to communicate with your SUSE Manager instance(s).</p>
+        <p>The Rancher SUSE Multi-Linux Manager Extension Proxy is not installed.</p>
+        <p>This component is required in order for the UI to communicate with your SUSE Multi-Linux Manager instance(s).</p>
         <button
           class="btn role-primary"
           :disabled="busy"
           @click="enable()"
         >
-          Install SUSE Manager Extension Proxy
+          Install SUSE Multi-Linux Manager Extension Proxy
         </button>
         <div
           v-if="busy"
           class="suma-loading"
           >
           <i class="icon icon-spinner icon-spin" />
-          Installing SUSE Manager Extension Proxy ...
+          Installing SUSE Multi-Linux Manager Extension Proxy ...
           </div>
         <Banner
           v-if="error"

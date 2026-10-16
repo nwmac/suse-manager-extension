@@ -7,24 +7,33 @@ import actions from './actions';
 const sumaFactory = (): CoreStoreSpecifics => {
   return {
     state() {
-      return { 
+      return {
         // Map of SUSE Manager Server to data for that server
         // sumaInstances: {},
 
         // Map of cluster IDs to SUMA Instance name
-        // TODO Note needed
+        // TODO Note needed
         clusterInstanceMap: {},
-        
+
         sumaSystems: [], notifications: {},
 
         // Map of system id to system groups
         systemGroups: {},
 
+        // Map of suseManagerLink → SUMA system group id (used to link to the
+        // MLM UI's group detail page)
+        systemGroupIds: {},
+
         // Loading status of each Suse Manager system group
         loadingStatus: {},
 
         // Actions in progress - a map from a SUSE Manager ID to an array of action metadata
-        actions: {}
+        actions: {},
+
+        // Monotonic counter bumped after a patch apply completes; patch tables
+        // watch this so they can clear their selection once patches have been
+        // scheduled without needing a direct component ref from the resource layer.
+        patchSelectionClearTick: 0,
       };
     },
 

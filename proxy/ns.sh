@@ -1,0 +1,1 @@
+export OKTETO_NAMESPACE=suse-manager

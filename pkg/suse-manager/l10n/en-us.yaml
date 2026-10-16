@@ -1,8 +1,8 @@
 suma:
-  label: SUSE Manager
+  label: SUSE Multi-Linux Manager
   patch-status-updating: updating
   notification:
-    title: Suse Manager is performing the following actions
+    title: Suse Multi-Linux Manager is performing the following actions
   cluster-details:
     patches-col: Patches
     table-actions:
@@ -21,12 +21,12 @@ suma:
       advisory-date: Date
       advisory-update-date: Update Date
   errors:
-    generic: Unable to communicate with the SUSE Manager UI Extension Proxy
-    proxy: Unable to communicate with the SUSE Manager UI Extension Proxy - please check it is installed and running
+    generic: Unable to communicate with the SUSE Multi-Linux Manager UI Extension Proxy
+    proxy: Unable to communicate with the SUSE Multi-Linux Manager UI Extension Proxy - please check it is installed and running
 
 typeLabel:
   susemanager.cattle.io.manager: |-
     {count, plural,
-      one { SUSE Manager }
-      other { SUSE Managers }
+      one { SUSE Multi-Linux Manager }
+      other { SUSE Multi-Linux Managers }
     }

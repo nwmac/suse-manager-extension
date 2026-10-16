@@ -5,32 +5,62 @@ import {
   sumaGetSystemsInSystemGroup,
   sumaListSystemEvents,
   sumaListLatestUpgradablePackages,
+  sumaGetSystemDetails,
+  sumaGetRunningKernel,
+  sumaGetInstalledProducts,
+  sumaGetRegistrationDate,
+  sumaGetSubscribedBaseChannel,
+  sumaListSubscribedChildChannels,
+  sumaListSystemsRequiringReboot,
+  sumaListCompletedActions,
+  sumaListFailedActions,
 } from '../../shared/api';
 import SumaPatches from '../../models/crd.sumapatches';
 
-import { processError, processPatch, sumaSystemForNode } from '../../shared/utils';
+import { processError, processPatch, sumaSystemForNode, formatActionLine, isPatchRelevantAction } from '../../shared/utils';
 
 async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: string, sumaGroup: string, sumaSystem: any, fetchSumaEvents = true) {
-  const reqs: any = { sumaPackages: await sumaListLatestUpgradablePackages(store, suseManagerId, sumaSystem?.id) };
+  const sid = sumaSystem?.id;
+
+  const reqs: any = {
+    sumaPackages:      sumaListLatestUpgradablePackages(store, suseManagerId, sid),
+    sumaDetails:       sumaGetSystemDetails(store, suseManagerId, sid).catch(() => undefined),
+    sumaKernel:        sumaGetRunningKernel(store, suseManagerId, sid).catch(() => undefined),
+    sumaProducts:      sumaGetInstalledProducts(store, suseManagerId, sid).catch(() => []),
+    sumaRegistered:    sumaGetRegistrationDate(store, suseManagerId, sid).catch(() => undefined),
+    sumaBaseChannel:   sumaGetSubscribedBaseChannel(store, suseManagerId, sid).catch(() => undefined),
+    sumaChildChannels: sumaListSubscribedChildChannels(store, suseManagerId, sid).catch(() => []),
+    sumaRebootList:    sumaListSystemsRequiringReboot(store, suseManagerId).catch(() => []),
+  };
 
   if (fetchSumaEvents) {
-    reqs.sumaEvents = await sumaListSystemEvents(store, suseManagerId, sumaSystem?.id);
+    reqs.sumaEvents = sumaListSystemEvents(store, suseManagerId, sid);
   }
 
   const res: any = await allHash(reqs);
 
   const sumaPackages = res.sumaPackages;
   const sumaEvents = res.sumaEvents || [];
-  const updatedSumaSystem = { ...sumaSystem };
+  const updatedSumaSystem = {
+    ...sumaSystem,
+    ...(res.sumaDetails || {}),
+    suseManagerId,
+    kernel:            res.sumaKernel,
+    installedProducts: res.sumaProducts || [],
+    registered:        res.sumaRegistered,
+    baseChannel:       res.sumaBaseChannel,
+    childChannels:     res.sumaChildChannels || [],
+    reboot_required:   (res.sumaRebootList || []).some((s: any) => s.id === sid),
+  };
 
   // update packages (patches) payload with complimentary data needed for classify
   const updatedSumaPackages = sumaPackages.map((pkg: any) => {
     const updatedPkg = {
       ...pkg,
-      metadata:      { name: `${ pkg.id }` },
-      type:          'crd.sumapatches',
-      kind:          'crd.sumapatches',
-      suma:          {
+      metadata: { name: `${ pkg.id }` },
+      type:     'crd.sumapatches',
+      kind:     'crd.sumapatches',
+      suma:     {
         suseManagerId,
         systemId: sumaSystem.id,
         sumaGroup,
@@ -38,8 +68,6 @@ async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: stri
       },
       store, // passing the store is needed for the API calls and data update on the SUMA store
     };
-
-    console.error('Processing PATCH');
 
     processPatch(updatedPkg);
 
@@ -53,15 +81,24 @@ async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: stri
   });
 
   updatedSumaSystem.listLatestUpgradablePackages = updatedSumaPackages;
-  updatedSumaSystem.clusterGroup = sumaGroup.name;
 
-  // get only ongoing system events
-  const eventsInProgress = sumaEvents.filter((ev: any) => ev.created_date && !ev.completed_date);
+  // TODO: Need to check this
+  //updatedSumaSystem.clusterGroup = sumaGroup.name;
+  updatedSumaSystem.clusterGroup = sumaGroup;
+
+  // Retain the raw event history for the Events tab. `events` below is a
+  // filtered, enriched view used by the in-progress notification panel.
+  updatedSumaSystem.allEvents = sumaEvents;
+
+  // get only ongoing system events, skipping SUMA's Package List Refresh
+  // follow-on so the notification banner tracks the patch action itself.
+  const eventsInProgress = sumaEvents.filter((ev: any) => ev.created_date && !ev.completed_date && isPatchRelevantAction(ev));
   const events = eventsInProgress.map((ev: any) => {
     return {
       ...ev,
-      sid:          sumaSystem.id,
-      profile_name: sumaSystem.profile_name
+      sid:           sumaSystem.id,
+      suseManagerId,
+      profile_name:  sumaSystem.profile_name,
     };
   });
 
@@ -81,9 +118,6 @@ export default {
     const sumaInfo = data.suseManagerLink.split('/');
     const sumaInstance = sumaInfo[0];
     const groupName = sumaInfo.length === 2 ? sumaInfo[1] : data.clusterName;
-
-    console.error(this);
-    console.error(ctx);
 
     try {
       const sumaGroups = await sumaListAllGroups(data.store, data.suseManagerLink);
@@ -107,7 +141,7 @@ export default {
     });
 
     try {
-      // get SUMA info for a group of systems in a cluster (GROUP NAME in SUMA must match CLUSTER NAME in Rancher!!!)
+      // get MLM info for a group of systems in a cluster (GROUP NAME in SUMA must match CLUSTER NAME in Rancher!!!)
       if (groupName) {
         if (sumaGroupFound && sumaGroupFound['system_count']) {
           sumaSystems = await sumaGetSystemsInSystemGroup(data.store, sumaInstance, sumaGroupFound.name);
@@ -132,6 +166,13 @@ export default {
           id:      data.suseManagerLink,
           systems: sumaSystems,
         });
+
+        if (sumaGroupFound?.id !== undefined) {
+          ctx.commit('updateSystemGroupId', {
+            id:      data.suseManagerLink,
+            groupId: sumaGroupFound.id,
+          });
+        }
       }
 
       ctx.commit('updateLoadingStatus', {
@@ -149,11 +190,13 @@ export default {
   },
 
   async updateSystemEventsList(ctx: any, data: any) {
-    const systemEvents = await sumaListSystemEvents(data.store, data.sid);
+    const suseManagerId = (data.suseManagerLink || '').split('/')[0];
+    const systemEvents = await sumaListSystemEvents(data.store, data.suseManagerLink, data.sid);
 
     ctx.commit('updateSystemEventsList', {
       sid: data.sid,
-      systemEvents
+      systemEvents,
+      suseManagerId,
     });
   },
 
@@ -170,5 +213,74 @@ export default {
    */
   updateSystemGroup(ctx: any, data: any) {
     ctx.commit('updateSystemGroup', data);
-  }  
+  },
+
+  /**
+   * Once a batch of in-progress patch actions has drained, ask SUMA about
+   * completed and failed actions and report a summary via the notification
+   * banner. For failures, echo the same one-line format used in the
+   * in-progress panel for the first failure, plus a count of the rest.
+   *
+   * `actions` is a snapshot of {id → {action_type, profile_name, name}}
+   * captured during polling. It's required because SUMA's completed / failed
+   * listings don't carry per-system fields we can format from.
+   */
+  async summarizePatchOutcomes(ctx: any, data: {
+    store: any;
+    suseManagerLink: string;
+    actions: Record<string, { action_type: string; profile_name: string; name: string }>;
+  }) {
+    const trackedIds = Object.keys(data.actions || {});
+
+    if (!trackedIds.length || !data.suseManagerLink) {
+      return;
+    }
+
+    const [completed, failed] = await Promise.all([
+      sumaListCompletedActions(data.store, data.suseManagerLink).catch(() => []),
+      sumaListFailedActions(data.store, data.suseManagerLink).catch(() => []),
+    ]);
+
+    const wanted = new Set(trackedIds.map(String));
+    const completedList = (completed || []).filter((a: any) => wanted.has(String(a?.id)));
+    const failedList    = (failed    || []).filter((a: any) => wanted.has(String(a?.id)));
+    const completedHits = completedList.length;
+    const failedHits    = failedList.length;
+
+    // Nothing terminal yet — SUMA may not have surfaced the outcome.
+    // Signal to the caller (SumaNotification) that it should retry.
+    if (completedHits === 0 && failedHits === 0) {
+      return false;
+    }
+
+    let type: string;
+    let message: string;
+
+    if (failedHits === 0) {
+      type = 'success';
+      message = `All ${ completedHits } patch action${ completedHits === 1 ? '' : 's' } applied successfully.`;
+    } else {
+      const firstFailId = String(failedList[0].id);
+      const firstFail = data.actions[firstFailId];
+      const firstDetail = firstFail ? formatActionLine(firstFail) : '';
+      const restFailed = failedHits - 1;
+      const suffix = restFailed > 0 ? ` (and ${ restFailed } more failed)` : '';
+
+      if (completedHits > 0) {
+        type = 'warning';
+        message = `${ completedHits } patch action${ completedHits === 1 ? '' : 's' } applied, ${ failedHits } failed. ${ firstDetail }${ suffix }`;
+      } else {
+        type = 'error';
+        message = `Patch action${ failedHits === 1 ? '' : 's' } failed: ${ firstDetail }${ suffix }`;
+      }
+    }
+
+    ctx.commit('updateNotifications', {
+      type,
+      message,
+      duration: 15000,
+    });
+
+    return true;
+  }
 };
