@@ -1,7 +1,7 @@
 apiVersion: v2
-appVersion: "0.1.0"
+appVersion: "0.2.0"
 name: suse-manager-proxy
 description: Proxy for the Rancher SUSE Manager UI Extension
 type: application
-version: 0.1.0
+version: 0.2.0
 icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/main/proxy/helm/suma-rancher-proxy/icon.png
