@@ -1,16 +1,15 @@
 {
   "name": "suse-manager",
   "description": "Integrates SUSE Multi-Linux Manager into Rancher",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": false,
   "rancher": {
     "annotations": {
       "catalog.cattle.io/display-name": "SUSE Multi-Linux Manager"
     }
   },
-  "icon":"https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png",
-  "scripts": {
-  },
+  "icon": "https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png",
+  "scripts": {},
   "engines": {
     "node": ">=24"
   },
