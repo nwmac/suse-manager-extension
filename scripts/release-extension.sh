@@ -5,7 +5,8 @@
 # What it does:
 #   1. Verifies the working tree is clean and the current branch is `main`.
 #   2. Ensures the local main is up-to-date with origin/main.
-#   3. Rewrites the "version" field in package.json to the given version.
+#   3. Rewrites the "version" field in package.json and in the extension's
+#      pkg/suse-manager/package.json (the one publish-pkgs actually reads).
 #   4. Commits the bump ("Release vX.Y.Z") and pushes to origin/main.
 #   5. Creates and pushes an annotated tag vX.Y.Z.
 #   6. If `gh` is available, tails the resulting build-extension workflow run.
@@ -103,12 +104,14 @@ if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
-CURRENT_VERSION="$(node -p "require('./package.json').version")"
+PKG_JSON="pkg/suse-manager/package.json"
+
+CURRENT_VERSION="$(node -p "require('./$PKG_JSON').version")"
 echo "Current version: $CURRENT_VERSION"
 echo "New version    : $VERSION"
 
 if [[ "$CURRENT_VERSION" == "$VERSION" ]]; then
-  echo "package.json already reports $VERSION; nothing to bump." >&2
+  echo "$PKG_JSON already reports $VERSION; nothing to bump." >&2
   exit 1
 fi
 
@@ -116,18 +119,22 @@ fi
 
 # `npm version` would run git ops on its own — do the rewrite ourselves so we
 # stay in control of the commit and tag.
+# The extension's own package.json is what publish-pkgs reads to name the
+# built chart; the root package.json is kept in step for consistency.
 node -e '
   const fs = require("fs");
-  const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-  pkg.version = process.argv[1];
-  fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-' "$VERSION"
+  for (const file of process.argv.slice(2)) {
+    const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+    pkg.version = process.argv[1];
+    fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
+  }
+' "$VERSION" package.json "$PKG_JSON"
 
 # Refresh the yarn.lock resolution of our own package (if listed) so it stays
 # consistent. Ignore failures — the lockfile does not always contain a self-ref.
 yarn install --silent >/dev/null 2>&1 || true
 
-git add package.json
+git add package.json "$PKG_JSON"
 if ! git diff --cached --quiet -- yarn.lock; then
   # only stage yarn.lock if the bump actually changed it
   git add yarn.lock
