@@ -5,7 +5,8 @@
   "private": false,
   "rancher": {
     "annotations": {
-      "catalog.cattle.io/display-name": "SUSE Multi-Linux Manager"
+      "catalog.cattle.io/display-name": "SUSE Multi-Linux Manager",
+      "catalog.cattle.io/ui-extensions-version": ">= 3.0.0 < 4.0.0"
     }
   },
   "icon": "https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png",
