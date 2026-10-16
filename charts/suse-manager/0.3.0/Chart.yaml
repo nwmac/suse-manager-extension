@@ -6,6 +6,7 @@ annotations:
   catalog.cattle.io/scope: management
   catalog.cattle.io/ui-component: plugins
   catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+  catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
 apiVersion: v2
 appVersion: 0.3.0
 description: Integrates SUSE Multi-Linux Manager into Rancher

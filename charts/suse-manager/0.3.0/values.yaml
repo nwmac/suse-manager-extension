@@ -11,3 +11,4 @@ plugin:
   noAuth: false
   metadata:
     catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+    catalog.cattle.io/ui-extensions-version: ">= 3.0.0 < 4.0.0"
