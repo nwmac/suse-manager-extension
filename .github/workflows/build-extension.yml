@@ -24,7 +24,7 @@ jobs:
     permissions: write-all
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -34,7 +34,7 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Setup Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v5
         with:
           version: v3.8.0
 
@@ -44,7 +44,7 @@ jobs:
           yq-version: v4.28.2
 
       - name: Setup Nodejs and npm
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: '16'
 
@@ -52,7 +52,7 @@ jobs:
         run: npm install -g yarn
 
       - name: Setup Nodejs with yarn caching
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: '16'
           cache: yarn
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload charts artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
           name: charts
           path: tmp
@@ -139,7 +139,7 @@ jobs:
     permissions: write-all
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
 
@@ -149,7 +149,7 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Download build artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v8
         with:
           name: charts
 
@@ -160,7 +160,7 @@ jobs:
           git push
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.4.1
+        uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: ./charts/*
         env:
