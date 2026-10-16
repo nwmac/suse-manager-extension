@@ -11,10 +11,30 @@ entries:
       catalog.cattle.io/ui-component: plugins
       catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
     apiVersion: v2
-    appVersion: 0.4.0
-    created: "2026-10-16T12:19:03.688930289Z"
+    appVersion: 0.5.0
+    created: "2026-10-16T16:26:09.124443222Z"
     description: Integrates SUSE Multi-Linux Manager into Rancher
-    digest: de33ccdee567ddbbed47aee09d973968072e796ce60c368c26f591e9f5d6df84
+    digest: 3740b7a16199e1700daa91cba69f00c9ec159fdfc1e50a1ab1da488c2ec258ba
+    icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
+    name: suse-manager
+    type: application
+    urls:
+    - assets/suse-manager/suse-manager-0.5.0.tgz
+    version: 0.5.0
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/permits-os: linux, windows
+      catalog.cattle.io/scope: management
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
+    apiVersion: v2
+    appVersion: 0.4.0
+    created: "2026-10-16T15:38:37.730584686Z"
+    description: Integrates SUSE Multi-Linux Manager into Rancher
+    digest: da3b2612190ef4204075caf732d367c883ef7a72a74980c3f47b6150aeebf464
     icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
     name: suse-manager
     type: application
@@ -62,6 +82,17 @@ entries:
     version: 0.1.0
   suse-manager-proxy:
   - apiVersion: v2
+    appVersion: 0.2.0
+    created: "2026-10-16T15:38:37.730768602Z"
+    description: Proxy for the Rancher SUSE Manager UI Extension
+    digest: 7748aeba2a6d9b21b93c09721dccaa07c8695354f7679fe52a21215580976377
+    icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/main/proxy/helm/suma-rancher-proxy/icon.png
+    name: suse-manager-proxy
+    type: application
+    urls:
+    - assets/suse-manager-proxy/suse-manager-proxy-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
     appVersion: 0.1.0
     created: "2024-09-18T14:53:45.40342+01:00"
     description: Proxy for the Rancher SUSE Manager UI Extension
@@ -71,4 +102,4 @@ entries:
     urls:
     - assets/suse-manager-proxy/suse-manager-proxy-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-16T12:19:03.687801623Z"
+generated: "2026-10-16T16:26:09.123543038Z"
