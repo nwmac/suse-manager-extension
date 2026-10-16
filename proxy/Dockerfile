@@ -10,7 +10,8 @@ WORKDIR /app
 
 COPY . ./
 
-RUN cd src; go build -o /suse-manager-rancher-proxy
+# Build a static binary so it doesn't depend on the glibc version in the runtime image
+RUN cd src; CGO_ENABLED=0 go build -o /suse-manager-rancher-proxy
 
 # Bundle the application into a scratch image
 FROM registry.suse.com/bci/bci-micro:15.4
