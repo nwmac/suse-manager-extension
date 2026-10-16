@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: suse-manager-service-account
+  namespace: suse-manager
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: suse-manager
+  name: suse-manager-secrets-reader
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["list", "get"]
+- apiGroups: ["susemanager.cattle.io"]
+  resources: ["managers"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: suse-manager
+subjects:
+- kind: ServiceAccount
+  name: suse-manager-service-account
+  namespace: suse-manager
+roleRef:
+  kind: Role
+  name: suse-manager-secrets-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -12,14 +12,14 @@ entries:
       catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
     apiVersion: v2
     appVersion: 0.4.0
-    created: "2026-10-16T12:19:22.958342276Z"
+    created: "2026-10-16T15:38:37.730584686Z"
     description: Integrates SUSE Multi-Linux Manager into Rancher
-    digest: 3b71891d3e4810e0b72c9dae88018c6f90e25effe601c23f86a212c09ae938d0
+    digest: da3b2612190ef4204075caf732d367c883ef7a72a74980c3f47b6150aeebf464
     icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
     name: suse-manager
     type: application
     urls:
-    - https://github.com/nwmac/suse-manager-extension/releases/download/suse-manager-0.4.0/suse-manager-0.4.0.tgz
+    - assets/suse-manager/suse-manager-0.4.0.tgz
     version: 0.4.0
   - annotations:
       catalog.cattle.io/certified: rancher
@@ -62,6 +62,17 @@ entries:
     version: 0.1.0
   suse-manager-proxy:
   - apiVersion: v2
+    appVersion: 0.2.0
+    created: "2026-10-16T15:38:37.730768602Z"
+    description: Proxy for the Rancher SUSE Manager UI Extension
+    digest: 7748aeba2a6d9b21b93c09721dccaa07c8695354f7679fe52a21215580976377
+    icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/main/proxy/helm/suma-rancher-proxy/icon.png
+    name: suse-manager-proxy
+    type: application
+    urls:
+    - assets/suse-manager-proxy/suse-manager-proxy-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
     appVersion: 0.1.0
     created: "2024-09-18T14:53:45.40342+01:00"
     description: Proxy for the Rancher SUSE Manager UI Extension
@@ -71,4 +82,4 @@ entries:
     urls:
     - assets/suse-manager-proxy/suse-manager-proxy-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-16T12:19:22.958367212Z"
+generated: "2026-10-16T15:38:37.730066437Z"

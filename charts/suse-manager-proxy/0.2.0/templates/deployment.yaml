@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suse-manager-rancher-proxy
+  namespace: suse-manager
+  labels:
+    app: suse-manager-rancher-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: suse-manager-rancher-proxy
+  template:
+    metadata:
+      labels:
+        app: suse-manager-rancher-proxy
+    spec:
+      serviceAccountName: suse-manager-service-account
+      containers:
+      - image: nwmac/suse-manager-rancher-proxy
+        name: suse-manager-rancher-proxy
