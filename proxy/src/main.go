@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -132,6 +133,15 @@ func main() {
 
 	if debugMode {
 		log.Println("Debug logging enabled")
+	}
+
+	if len(os.Args) == 2 {
+		log.Printf("Loading certs from %s", os.Args[1])
+		CertFilePath = fmt.Sprintf("%s/server-cert.pem", os.Args[1])
+		KeyFilePath = fmt.Sprintf("%s/server-key.pem", os.Args[1])
+
+		log.Printf("CertFilePath: %s", CertFilePath)
+		log.Printf("KeyFilePath:  %s", KeyFilePath)
 	}
 
 	// Init auth data cache
