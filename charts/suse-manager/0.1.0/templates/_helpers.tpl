@@ -38,7 +38,7 @@ Common labels
 helm.sh/chart: {{ include "extension-server.chart" . }}
 {{ include "extension-server.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | replace "+" "_" | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
@@ -49,4 +49,15 @@ Selector labels
 {{- define "extension-server.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "extension-server.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Pkg annotations
+*/}}
+{{- define "extension-server.pluginMetadata" -}}
+{{- with .Values.plugin.metadata }}
+{{- range $key, $value := . }}
+{{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
