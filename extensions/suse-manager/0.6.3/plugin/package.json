@@ -1,0 +1,21 @@
+{
+  "name": "suse-manager",
+  "description": "Integrates SUSE Multi-Linux Manager into Rancher",
+  "version": "0.6.3",
+  "private": false,
+  "rancher": true,
+  "icon": "https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png",
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "5.0.8",
+    "@vue/cli-service": "5.0.8",
+    "@vue/cli-plugin-typescript": "5.0.8",
+    "@vue/eslint-config-typescript": "9.1.0"
+  },
+  "files": [
+    "**/*"
+  ],
+  "main": "suse-manager-0.6.3.umd.min.js"
+}

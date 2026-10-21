@@ -1,0 +1,14 @@
+nameOverride: ""
+fullnameOverride: ""
+plugin:
+  enabled: true
+  versionOverride: ""
+  endpoint: >-
+    https://raw.githubusercontent.com/nwmac/suse-manager-extension/gh-pages/extensions/suse-manager/0.6.3
+  compressedEndpoint: >-
+    https://raw.githubusercontent.com/nwmac/suse-manager-extension/gh-pages/extensions/suse-manager/0.6.3.tgz
+  noCache: false
+  noAuth: false
+  metadata:
+    catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+    catalog.cattle.io/ui-extensions-version: ">= 3.0.0 < 4.0.0"
