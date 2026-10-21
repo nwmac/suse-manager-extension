@@ -1,6 +1,6 @@
 {
   "name": "suse-manager",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": false,
   "engines": {
     "node": ">=12"
