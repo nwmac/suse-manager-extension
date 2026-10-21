@@ -6,6 +6,7 @@ import Banner from '@components/Banner/Banner.vue';
 import Masthead from '@shell/components/ResourceList/Masthead';
 import ProxyStatus from '../components/ProxyStatus.vue';
 import { installHelmChart } from '../shared/utils';
+import { getProxyService, pingProxy } from '../shared/api';
 
 // If we add the Helm chart, this is the name we will use
 const HELM_REPOSITORY_NAME = 'suse-manager-proxy';
@@ -17,6 +18,28 @@ const HELM_REPOSITORY_URL = 'https://nwmac.github.io/suse-manager-extension';
 const HELM_CHART_NAME = 'suse-manager-proxy';
 
 const SUMA_SERVER = 'susemanager.cattle.io.manager';
+
+// How often we poll while waiting for each install step to complete
+const POLL_INTERVAL = 2000;
+
+// How long we wait for the Helm repository index to be downloaded
+const REPO_TIMEOUT = 2 * 60 * 1000;
+
+// How long we wait for the Helm install operation to complete (matches the install timeout)
+const INSTALL_TIMEOUT = 10 * 60 * 1000;
+
+// How long we wait for the proxy to respond once the chart has been installed
+const PROXY_TIMEOUT = 3 * 60 * 1000;
+
+// Steps shown to the user while installing the proxy
+const INSTALL_STEPS = [
+  { id: 'repo', label: 'Adding the Helm repository' },
+  { id: 'chart', label: 'Downloading the Helm repository index' },
+  { id: 'install', label: 'Installing the Helm chart' },
+  { id: 'proxy', label: 'Waiting for the proxy to start' },
+];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Route name Rancher uses for any resource detail page.
 const DETAIL_ROUTE_NAME = 'c-cluster-product-resource-namespace-id';
@@ -55,6 +78,12 @@ export default {
       busy:         false,
       error:        '',
       resource:     SUMA_SERVER,
+      // Install progress - map of step id to 'active' | 'done' | 'error'
+      stepStatus:   {},
+      // Extra detail shown against the active step
+      stepDetail:   '',
+      // Helm operation for the chart install (used to show the logs)
+      operation:    undefined,
     };
   },
 
@@ -134,6 +163,14 @@ export default {
   },
 
   computed: {
+    installSteps() {
+      return INSTALL_STEPS.map((step) => ({ ...step, status: this.stepStatus[step.id] }));
+    },
+
+    showSteps() {
+      return Object.keys(this.stepStatus).length > 0;
+    },
+
     resourceSchema() {
       return this.$store.getters[`management/schemaFor`](this.resource);
     },
@@ -162,58 +199,144 @@ export default {
 
   methods: {
     async enable() {
-      // TODO: Check permissions
-
       this.busy = true;
       this.error = '';
+      this.stepStatus = {};
+      this.stepDetail = '';
+      this.operation = undefined;
 
-      // Add the Helm repository, if it is not there
-      if (!this.haveHelmRepo) {
-        const data = {
-          type: CATALOG.CLUSTER_REPO,
-          metadata: {
-            name: HELM_REPOSITORY_NAME,
-          },
-          spec: {
-            url: HELM_REPOSITORY_URL
-          }
-        };
-
-        // Create a model for the new repository and save it
-        const repo = await this.$store.dispatch('management/create', data);
-
-        this.haveHelmRepo = await repo.save();
-      }
-
-      console.log(this.haveHelmRepo);
-
-      // Repository should have been created
-      // Try and fetch the chart that we want to install from the newly added repository
       try {
-        this.versionInfo = await this.$store.dispatch('management/request', {
-          method: 'GET',
-          url: `${this.haveHelmRepo.links.info}&chartName=${HELM_CHART_NAME}`,
-        });
+        const repo = await this.runStep('repo', () => this.ensureHelmRepo());
+        const versionInfo = await this.runStep('chart', () => this.waitForChart(repo));
 
-        console.log('OK');
-        console.log(this.versionInfo);
-        console.error('Installing ...');
+        await this.runStep('install', () => this.installChart(repo, versionInfo));
+        await this.runStep('proxy', () => this.waitForProxy());
 
-        const res = await installHelmChart(this.haveHelmRepo, this.versionInfo.chart, {});
-
-        console.error(res);
-
-        // this.busy = false;
-
-        // Got the chart version info for the chart
+        // The chart installs the CRD for MLM servers - reload the schemas so the page switches to the list
+        await this.$store.dispatch('management/loadSchemas', true);
+        await this.$fetch();
       } catch (e) {
-        console.error('Could not get chart');
-        console.log(e);
-
-        this.error = `Unable to locate the required Helm Chart '${ HELM_CHART_NAME }' in the Helm Repository '${ this.haveHelmRepo.metadata.name }'`;
+        this.error = e?.message || `${ e }`;
+      } finally {
         this.busy = false;
       }
-    }
+    },
+
+    async runStep(id, fn) {
+      this.stepStatus = { ...this.stepStatus, [id]: 'active' };
+      this.stepDetail = '';
+
+      try {
+        const res = await fn();
+
+        this.stepStatus = { ...this.stepStatus, [id]: 'done' };
+        this.stepDetail = '';
+
+        return res;
+      } catch (e) {
+        this.stepStatus = { ...this.stepStatus, [id]: 'error' };
+        throw e;
+      }
+    },
+
+    // Add the Helm repository, if it is not there
+    async ensureHelmRepo() {
+      if (this.haveHelmRepo) {
+        return this.haveHelmRepo;
+      }
+
+      const repo = await this.$store.dispatch('management/create', {
+        type:     CATALOG.CLUSTER_REPO,
+        metadata: { name: HELM_REPOSITORY_NAME },
+        spec:     { url: HELM_REPOSITORY_URL }
+      });
+
+      this.haveHelmRepo = await repo.save();
+
+      return this.haveHelmRepo;
+    },
+
+    // Rancher needs to download the repository index before the chart can be found, so retry until it is there
+    async waitForChart(repo) {
+      const deadline = Date.now() + REPO_TIMEOUT;
+
+      while (true) {
+        try {
+          return await this.$store.dispatch('management/request', {
+            method: 'GET',
+            url:    `${ repo.links.info }&chartName=${ HELM_CHART_NAME }`,
+          });
+        } catch (e) {
+          if (Date.now() > deadline) {
+            throw new Error(`Unable to locate the required Helm Chart '${ HELM_CHART_NAME }' in the Helm Repository '${ repo.metadata.name }'`);
+          }
+
+          this.stepDetail = 'Waiting for Rancher to download the repository index';
+          await sleep(POLL_INTERVAL);
+        }
+      }
+    },
+
+    // Install the chart and wait for the Helm operation to complete
+    async installChart(repo, versionInfo) {
+      const res = await installHelmChart(repo, versionInfo.chart, {});
+      const operationId = `${ res.operationNamespace }/${ res.operationName }`;
+      const deadline = Date.now() + INSTALL_TIMEOUT;
+
+      await repo.waitForOperation(operationId);
+
+      while (true) {
+        const operation = await this.$store.dispatch('management/find', {
+          type: CATALOG.OPERATION,
+          id:   operationId,
+          opt:  { force: true, watch: false }
+        });
+
+        this.operation = operation;
+
+        const state = operation.metadata?.state;
+        const name = (state?.name || '').toLowerCase();
+
+        if (name === 'successful' || name === 'completed') {
+          return operation;
+        }
+
+        if (state?.error || name === 'failed') {
+          throw new Error(`Installation of the Helm chart failed${ state?.message ? `: ${ state.message }` : '' } - see the logs for details`);
+        }
+
+        if (Date.now() > deadline) {
+          throw new Error('Timed out waiting for the Helm chart to install - see the logs for details');
+        }
+
+        this.stepDetail = state?.message || (name ? `Helm operation is ${ name }` : '');
+        await sleep(POLL_INTERVAL);
+      }
+    },
+
+    // Wait for the proxy service to exist and respond
+    async waitForProxy() {
+      const deadline = Date.now() + PROXY_TIMEOUT;
+
+      while (true) {
+        const service = await getProxyService(this.$store);
+
+        if (service && await pingProxy(this.$store)) {
+          return;
+        }
+
+        if (Date.now() > deadline) {
+          throw new Error('The SUSE Multi-Linux Manager Extension Proxy was installed but is not responding - please check the suse-manager-rancher-proxy deployment in the suse-manager namespace');
+        }
+
+        this.stepDetail = service ? 'Waiting for the proxy to respond' : 'Waiting for the proxy service to be created';
+        await sleep(POLL_INTERVAL);
+      }
+    },
+
+    showLogs() {
+      this.operation?.openLogs();
+    },
   }
 };
 </script>
@@ -246,13 +369,44 @@ export default {
         >
           Install SUSE Multi-Linux Manager Extension Proxy
         </button>
-        <div
-          v-if="busy"
-          class="suma-loading"
+        <ul
+          v-if="showSteps"
+          class="suma-install-steps"
+        >
+          <li
+            v-for="step in installSteps"
+            :key="step.id"
+            :class="step.status || 'pending'"
           >
-          <i class="icon icon-spinner icon-spin" />
-          Installing SUSE Multi-Linux Manager Extension Proxy ...
-          </div>
+            <i
+              v-if="step.status === 'active'"
+              class="icon icon-spinner icon-spin"
+            />
+            <i
+              v-else-if="step.status === 'done'"
+              class="icon icon-checkmark"
+            />
+            <i
+              v-else-if="step.status === 'error'"
+              class="icon icon-error"
+            />
+            <i
+              v-else
+              class="icon icon-dot-open"
+            />
+            <span>{{ step.label }}</span>
+            <span
+              v-if="step.status === 'active' && stepDetail"
+              class="step-detail"
+            >- {{ stepDetail }}</span>
+            <a
+              v-if="step.id === 'install' && operation && operation.links && operation.links.logs"
+              href="#"
+              class="step-logs"
+              @click.prevent="showLogs"
+            >View logs</a>
+          </li>
+        </ul>
         <Banner
           v-if="error"
           color="error"
@@ -275,6 +429,44 @@ export default {
 
     img {
       width: 96px;
+    }
+  }
+
+  .suma-install-steps {
+    list-style: none;
+    margin: 20px 0;
+    padding: 0;
+
+    li {
+      align-items: center;
+      display: flex;
+      margin: 8px 0;
+
+      > i {
+        margin-right: 8px;
+        width: 16px;
+      }
+
+      &.pending {
+        color: var(--disabled-text);
+      }
+
+      &.done > i {
+        color: var(--success);
+      }
+
+      &.error > i {
+        color: var(--error);
+      }
+
+      .step-detail {
+        color: var(--muted);
+        margin-left: 5px;
+      }
+
+      .step-logs {
+        margin-left: 10px;
+      }
     }
   }
 
