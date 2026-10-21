@@ -1,7 +1,7 @@
 <script>
 import ResourceTable from '@shell/components/ResourceTable';
 import ResourceFetch from '@shell/mixins/resource-fetch';
-import { CATALOG, SCHEMA } from '@shell/config/types';
+import { CATALOG, POD, SCHEMA } from '@shell/config/types';
 import Banner from '@components/Banner/Banner.vue';
 import Masthead from '@shell/components/ResourceList/Masthead';
 import ProxyStatus from '../components/ProxyStatus.vue';
@@ -285,32 +285,53 @@ export default {
 
       await repo.waitForOperation(operationId);
 
+      this.operation = await this.$store.dispatch('management/find', {
+        type: CATALOG.OPERATION,
+        id:   operationId,
+      });
+
+      // The operation itself has no completion state - it records the pod that runs the Helm command.
+      // Check that pod's phase, along with the status of the Helm release (the App) it creates
+      const podNamespace = this.operation.status?.podNamespace;
+      const podName = this.operation.status?.podName;
+      // installHelmChart installs the release into the suse-manager namespace, named after the chart
+      const appId = `suse-manager/${ versionInfo.chart.name }`;
+
       while (true) {
-        const operation = await this.$store.dispatch('management/find', {
-          type: CATALOG.OPERATION,
-          id:   operationId,
-          opt:  { force: true, watch: false }
-        });
+        const [pod, app] = await Promise.all([
+          podName ? this.findOrUndefined(POD, `${ podNamespace }/${ podName }`) : undefined,
+          this.findOrUndefined(CATALOG.APP, appId),
+        ]);
 
-        this.operation = operation;
+        const phase = pod?.status?.phase;
+        const releaseStatus = app?.spec?.info?.status;
 
-        const state = operation.metadata?.state;
-        const name = (state?.name || '').toLowerCase();
-
-        if (name === 'successful' || name === 'completed') {
-          return operation;
+        if (releaseStatus === 'deployed' || phase === 'Succeeded') {
+          return this.operation;
         }
 
-        if (state?.error || name === 'failed') {
-          throw new Error(`Installation of the Helm chart failed${ state?.message ? `: ${ state.message }` : '' } - see the logs for details`);
+        if (releaseStatus === 'failed' || phase === 'Failed') {
+          throw new Error('Installation of the Helm chart failed - see the logs for details');
         }
 
         if (Date.now() > deadline) {
           throw new Error('Timed out waiting for the Helm chart to install - see the logs for details');
         }
 
-        this.stepDetail = state?.message || (name ? `Helm operation is ${ name }` : '');
+        this.stepDetail = releaseStatus ? `Helm release is ${ releaseStatus }` : (phase ? `Helm operation is ${ phase.toLowerCase() }` : '');
         await sleep(POLL_INTERVAL);
+      }
+    },
+
+    async findOrUndefined(type, id) {
+      try {
+        return await this.$store.dispatch('management/find', {
+          type,
+          id,
+          opt: { force: true, watch: false }
+        });
+      } catch (e) {
+        return undefined;
       }
     },
 
@@ -442,8 +463,14 @@ export default {
       display: flex;
       margin: 8px 0;
 
+      // Fixed square box with the glyph centred, so the spinner rotates in place
       > i {
+        display: inline-block;
+        flex-shrink: 0;
+        height: 16px;
+        line-height: 16px;
         margin-right: 8px;
+        text-align: center;
         width: 16px;
       }
 
