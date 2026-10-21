@@ -11,6 +11,26 @@ entries:
       catalog.cattle.io/ui-component: plugins
       catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
     apiVersion: v2
+    appVersion: 0.6.4
+    created: "2026-10-21T17:24:27.142340276Z"
+    description: Integrates SUSE Multi-Linux Manager into Rancher
+    digest: efcbdd503bf3e850f56d52cc8908887d94ef5536c47877828ca5bf173708e388
+    icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
+    name: suse-manager
+    type: application
+    urls:
+    - https://github.com/nwmac/suse-manager-extension/releases/download/suse-manager-0.6.4/suse-manager-0.6.4.tgz
+    version: 0.6.4
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/permits-os: linux, windows
+      catalog.cattle.io/scope: management
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
+    apiVersion: v2
     appVersion: 0.6.3
     created: "2026-10-21T17:19:12.530356359Z"
     description: Integrates SUSE Multi-Linux Manager into Rancher
@@ -162,4 +182,4 @@ entries:
     urls:
     - assets/suse-manager-proxy/suse-manager-proxy-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-21T17:19:12.530371942Z"
+generated: "2026-10-21T17:24:27.142361939Z"
