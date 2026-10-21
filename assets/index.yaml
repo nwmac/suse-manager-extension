@@ -11,15 +11,35 @@ entries:
       catalog.cattle.io/ui-component: plugins
       catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
     apiVersion: v2
-    appVersion: 0.6.3
-    created: "2026-10-21T17:23:52.811089269Z"
+    appVersion: 0.6.4
+    created: "2026-10-21T17:24:04.61563387Z"
     description: Integrates SUSE Multi-Linux Manager into Rancher
-    digest: d25a36a0f5b8055a2a556bdfa0660f460f57885587b12aa69a869fb4c9f6697c
+    digest: d6611eeb67d8e7f9e502070b45af7a5a32dff4938a938e90704d81446c1aea6a
     icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
     name: suse-manager
     type: application
     urls:
-    - assets/suse-manager/suse-manager-0.6.3.tgz
+    - assets/suse-manager/suse-manager-0.6.4.tgz
+    version: 0.6.4
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/display-name: SUSE Multi-Linux Manager
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/permits-os: linux, windows
+      catalog.cattle.io/scope: management
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
+    apiVersion: v2
+    appVersion: 0.6.3
+    created: "2026-10-21T17:19:12.530356359Z"
+    description: Integrates SUSE Multi-Linux Manager into Rancher
+    digest: 425f11c597ce54f09d48e4e2385ab25dce82a17ae99cdd1feac6725c60636876
+    icon: https://raw.githubusercontent.com/nwmac/suse-manager-extension/refs/heads/main/pkg/suse-manager/suma_icon.png
+    name: suse-manager
+    type: application
+    urls:
+    - https://github.com/nwmac/suse-manager-extension/releases/download/suse-manager-0.6.3/suse-manager-0.6.3.tgz
     version: 0.6.3
   - annotations:
       catalog.cattle.io/certified: rancher
@@ -162,4 +182,4 @@ entries:
     urls:
     - assets/suse-manager-proxy/suse-manager-proxy-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-21T17:23:52.81064608Z"
+generated: "2026-10-21T17:24:04.61485039Z"
