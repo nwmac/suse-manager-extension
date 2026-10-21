@@ -1,7 +1,7 @@
 {
   "name": "suse-manager",
   "description": "Integrates SUSE Multi-Linux Manager into Rancher",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": false,
   "rancher": {
     "annotations": {
