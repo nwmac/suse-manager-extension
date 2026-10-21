@@ -64,8 +64,7 @@ export default {
           labelKey:      'suma.node-details.cols.advisory-name',
           value:         'advisory_name',
           sort:          'advisory_name',
-          formatter:     'Link',
-          formatterOpts: { urlKey: 'sumaErrataUrl' },
+          formatter:     'PatchDetailsLink',
         },
         {
           name:     'advisory-synopsis',

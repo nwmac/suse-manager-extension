@@ -7,6 +7,7 @@ import Vue from 'vue';
 import sumaStore from './store/suma';
 import { sumaScheduleApplyErrata } from './shared/api';
 import { SUSE_MANAGER_LINK_ANNOTATION } from './shared/definitions';
+import { toProvCluster } from './shared/utils';
 
 // TODO: Re-instate these - I think we added support for auto-loading formatters
 // Register local formatters
@@ -67,13 +68,6 @@ export default function(plugin: IPlugin, args:any) {
     { component: () => import('./components/SumaPanel.vue') }
   );
 
-  // add notification panel for ongoing OS patches
-  plugin.addPanel(
-    PanelLocation.DETAILS_MASTHEAD,
-    { resource: [CAPI.RANCHER_CLUSTER, MANAGEMENT.NODE, CAPI.MACHINE], mode: ['detail'] },
-    { component: () => import('./components/SumaNotification.vue') }
-  );
-
   // Table action to link to SUSE Manager when a cluster is not linked
   plugin.addAction(
     ActionLocation.TABLE,
@@ -81,13 +75,13 @@ export default function(plugin: IPlugin, args:any) {
     {
       label: 'Link with SUSE Multi-Linux Manager',
       enabled(ctx: any) {
-        return ctx.kind === 'Cluster' && !ctx?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+        return ctx.kind === 'Cluster' && !toProvCluster(ctx)?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
       },
       invoke(opts: ActionOpts, values: any[]) {
         const resource = values[0];
 
         resource.$dispatch('promptModal', {
-          resources: values,
+          resources: values.map(toProvCluster),
           component:  'SuseManagerManageLinkDialog',
           modalWidth: '450px'
         });
@@ -101,14 +95,14 @@ export default function(plugin: IPlugin, args:any) {
     {
       label: 'Remove SUSE Multi-Linux Manager link',
       enabled(ctx: any) {
-        return ctx.kind === 'Cluster' && !!ctx?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+        return ctx.kind === 'Cluster' && !!toProvCluster(ctx)?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
       },
       invoke(opts: ActionOpts, values: any[]) {
         if (values.length === 1) {
           const resource = values[0];
 
           resource.$dispatch('promptModal', {
-            resources: values,
+            resources: values.map(toProvCluster),
             component:  'SuseManagerRemoveLinkDialog',
             modalWidth: '450px'
           });
@@ -124,14 +118,14 @@ export default function(plugin: IPlugin, args:any) {
     {
       label: 'Register Nodes with SUSE Multi-Linux Manager',
       enabled(ctx: any) {
-        return ctx.kind === 'Cluster' && !!ctx?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+        return ctx.kind === 'Cluster' && !!toProvCluster(ctx)?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
       },
       invoke(opts: ActionOpts, values: any[]) {
         if (values.length === 1) {
           const resource = values[0];
 
           resource.$dispatch('promptModal', {
-            resources:  values,
+            resources:  values.map(toProvCluster),
             component:  'SuseManagerRegisterNodesDialog',
             modalWidth: '850px'
           });

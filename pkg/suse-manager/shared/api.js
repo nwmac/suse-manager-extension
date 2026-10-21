@@ -582,6 +582,34 @@ export async function sumaListSystemEvents(store, suseManagerID, sid) {
 }
 
 /**
+ * Fetch everything needed to show the details of a patch (errata): the details themselves,
+ * the packages it updates, the channels it applies to, its CVEs and the systems it affects
+ * @param {object} store - Vue store object
+ * @param {string} suseManagerID - suse manager id
+ * @param {string} advisoryName - the patch advisory name (e.g. 7677-1)
+ */
+export async function sumaGetErrataDetails(store, suseManagerID, advisoryName) {
+  const name = encodeURIComponent(advisoryName);
+  const get = async(path, def) => {
+    const response = await proxyRequest(store, suseManagerID, `/errata/${ path }?advisoryName=${ name }`);
+
+    return response.data?.result || def;
+  };
+
+  const [details, packages, channels, cves, systems] = await Promise.all([
+    get('getDetails', {}),
+    get('listPackages', []),
+    get('applicableToChannels', []),
+    get('listCves', []),
+    get('listAffectedSystems', []),
+  ]);
+
+  return {
+    details, packages, channels, cves, systems
+  };
+}
+
+/**
  * SUMA apply selected OS patches (upgradable packages) to a given system
  * @param {object} store - Vue store object
  * @param {array} suseManagerID - suse manager id
@@ -610,6 +638,13 @@ export async function sumaScheduleApplyErrata(store, suseManagerID, sids, errata
   }
 
   if (okay) {
+    // SUMA returns one action id per system, each applying all of the requested errata
+    const actionIds = schedule.data?.result;
+
+    if (Array.isArray(actionIds)) {
+      store.commit('suma/recordPatchCounts', { actionIds, count: data.errataIds.length });
+    }
+
     store.dispatch('suma/updateNotifications', {
       type:    'success',
       message: 'OS Patches successfully scheduled. OS Patching will begin shortly.'

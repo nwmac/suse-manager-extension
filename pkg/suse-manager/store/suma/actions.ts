@@ -17,7 +17,7 @@ import {
 } from '../../shared/api';
 import SumaPatches from '../../models/crd.sumapatches';
 
-import { processError, processPatch, sumaSystemForNode, formatActionLine, isPatchRelevantAction } from '../../shared/utils';
+import { processError, processPatch, sumaSystemForNode, formatActionLine, isPatchRelevantAction, patchCountFromActionName } from '../../shared/utils';
 
 async function updateSumaSystemPayload(ctx: any, store: any, suseManagerId: string, sumaGroup: string, sumaSystem: any, fetchSumaEvents = true) {
   const sid = sumaSystem?.id;
@@ -247,6 +247,16 @@ export default {
     const completedHits = completedList.length;
     const failedHits    = failedList.length;
 
+    // A single action can apply several patches, so report patch counts rather than action counts
+    const patchCount = (list: any[]) => list.reduce((sum: number, a: any) => {
+      const id = String(a?.id);
+
+      return sum + (ctx.state.patchCounts?.[id] || patchCountFromActionName(data.actions[id]?.name || a?.name) || 1);
+    }, 0);
+    const completedPatches = patchCount(completedList);
+    const failedPatches = patchCount(failedList);
+    const patches = (n: number) => `${ n } patch${ n === 1 ? '' : 'es' }`;
+
     // Nothing terminal yet — SUMA may not have surfaced the outcome.
     // Signal to the caller (SumaNotification) that it should retry.
     if (completedHits === 0 && failedHits === 0) {
@@ -258,7 +268,7 @@ export default {
 
     if (failedHits === 0) {
       type = 'success';
-      message = `All ${ completedHits } patch action${ completedHits === 1 ? '' : 's' } applied successfully.`;
+      message = completedPatches === 1 ? '1 patch applied successfully.' : `All ${ patches(completedPatches) } applied successfully.`;
     } else {
       const firstFailId = String(failedList[0].id);
       const firstFail = data.actions[firstFailId];
@@ -268,10 +278,10 @@ export default {
 
       if (completedHits > 0) {
         type = 'warning';
-        message = `${ completedHits } patch action${ completedHits === 1 ? '' : 's' } applied, ${ failedHits } failed. ${ firstDetail }${ suffix }`;
+        message = `${ patches(completedPatches) } applied, ${ failedPatches } failed. ${ firstDetail }${ suffix }`;
       } else {
         type = 'error';
-        message = `Patch action${ failedHits === 1 ? '' : 's' } failed: ${ firstDetail }${ suffix }`;
+        message = `${ failedPatches === 1 ? 'Patch' : patches(failedPatches) } failed: ${ firstDetail }${ suffix }`;
       }
     }
 

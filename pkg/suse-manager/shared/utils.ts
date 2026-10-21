@@ -1,4 +1,14 @@
 import { CATALOG as CATALOG_ANNOTATIONS } from '@shell/config/labels-annotations';
+import { MANAGEMENT } from '@shell/config/types';
+
+/**
+ * Cluster list rows are management clusters (they proxy their actions to the provisioning cluster),
+ * so resolve to the provisioning cluster, which is where the SUSE Manager link annotation lives
+ * @param resource Management or provisioning cluster
+ */
+export function toProvCluster(resource: any) {
+  return resource?.type === MANAGEMENT.CLUSTER ? resource.provCluster : resource;
+}
 
 // A resource less that 1m30s old is considered new
 const RECENT_TIME_WINDOW = 90;
@@ -81,12 +91,31 @@ export function groupPatches(server: any) {
   return summary;
 }
 
+// Matches the "(and N more patches)" suffix SUMA adds to combined patch update action names.
+// SUMA truncates action names (to 128 chars), so the suffix may be cut short (e.g. missing the ')')
+const MORE_PATCHES_SUFFIX = /\s*\(and\s+(\d+)\b[^()]*\)?\s*$/;
+
 /**
  * SUMA action names for combined patch updates always include an
- * "(and N more patches)" suffix — even when N is 0. Strip the noise-only case.
+ * "(and N more patches)" suffix — even when N is 0. Strip the noise-only case and
+ * repair the suffix when SUMA has truncated it.
  */
 export function stripEmptyMoreSuffix(name: string): string {
-  return (name || '').replace(/\s*\(and 0 more patches\)\s*$/, '');
+  return (name || '').replace(MORE_PATCHES_SUFFIX, (match: string, more: string) => {
+    const n = parseInt(more, 10);
+
+    return n > 0 ? ` (and ${ n } more patch${ n === 1 ? '' : 'es' })` : '';
+  });
+}
+
+/**
+ * Number of patches covered by a SUMA patch action, derived from its "(and N more patches)" suffix.
+ * Returns undefined if the name does not include the suffix (e.g. it was truncated away)
+ */
+export function patchCountFromActionName(name: string): number | undefined {
+  const match = (name || '').match(MORE_PATCHES_SUFFIX);
+
+  return match ? parseInt(match[1], 10) + 1 : undefined;
 }
 
 /**

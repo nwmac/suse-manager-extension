@@ -111,8 +111,8 @@ export default {
         groupName = this.systemGroup;
       }
 
-      // The action is registered against provisioning.cattle.io.cluster, so
-      // resources[0] is already the provisioning cluster we need to annotate.
+      // The table actions map the cluster rows to their provisioning clusters before
+      // opening this dialog, so resources[0] is the provisioning cluster to annotate.
       const cluster = this.resources[0];
 
       cluster.setAnnotation(SUSE_MANAGER_LINK_ANNOTATION, `${ this.suseManagerId }/${ groupName }`);

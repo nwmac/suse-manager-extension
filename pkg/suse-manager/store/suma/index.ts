@@ -34,6 +34,10 @@ const sumaFactory = (): CoreStoreSpecifics => {
         // watch this so they can clear their selection once patches have been
         // scheduled without needing a direct component ref from the resource layer.
         patchSelectionClearTick: 0,
+
+        // Map of SUMA action id → number of patches (errata) that action applies. Recorded when
+        // we schedule patches, since SUMA's action names are truncated and can't be relied upon
+        patchCounts: {},
       };
     },
 

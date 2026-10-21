@@ -48,6 +48,16 @@ export default {
     }
   },
 
+  recordPatchCounts(state: any, { actionIds, count }: { actionIds: any[], count: number }) {
+    const patchCounts = { ...state.patchCounts };
+
+    (actionIds || []).forEach((id: any) => {
+      patchCounts[String(id)] = count;
+    });
+
+    state.patchCounts = patchCounts;
+  },
+
   bumpPatchSelectionClear(state: any) {
     state.patchSelectionClearTick = (state.patchSelectionClearTick || 0) + 1;
   },

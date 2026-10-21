@@ -4,6 +4,7 @@ import { checkForSumaProxy, getSuseManagerConfig, sumaListRegistrations } from '
 import { groupPatches, sumaSystemForNode } from '../shared/utils';
 import Banner from '@components/Banner/Banner.vue';
 import SeverityIcon from './SeverityIcon.vue';
+import SumaNotification from './SumaNotification.vue';
 
 const REGISTRATIONS_POLL_MS = 5000;
 
@@ -16,6 +17,7 @@ export default {
   components: {
     Banner,
     SeverityIcon,
+    SumaNotification,
  },
 
   props: {
@@ -376,6 +378,10 @@ export default {
           :show-label="true"
         />
     </div>
+    <SumaNotification
+      class="suma-notification"
+      :resource="resource"
+    />
     <div v-if="loading.error">
       <Banner color="error" :label="loading.error.error" />
   </div>
@@ -411,8 +417,18 @@ export default {
     }
   }
 
-  .registration-banner {
+  // Indent banners to line up with the text after the MLM icon
+  .suma-notification ::v-deep .banner {
+    margin-bottom: 0;
+    margin-left: 29px;
     margin-top: 10px;
+    width: auto;
+  }
+
+  .registration-banner {
+    margin-left: 29px;
+    margin-top: 10px;
+    width: auto;
 
     .registration-busy {
       align-items: center;
