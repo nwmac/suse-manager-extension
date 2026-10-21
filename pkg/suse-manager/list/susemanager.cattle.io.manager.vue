@@ -226,6 +226,7 @@ export default {
         :loading="loading"
         :schema="schema"
         :rows="rows"
+        :table-views="true"
       />
   </div>
   <div v-else class="suma-install">
