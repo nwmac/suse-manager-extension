@@ -31,6 +31,9 @@ const INSTALL_TIMEOUT = 10 * 60 * 1000;
 // How long we wait for the proxy to respond once the chart has been installed
 const PROXY_TIMEOUT = 3 * 60 * 1000;
 
+// How long we wait for Rancher to pick up the schema for the MLM server CRD before reloading the page
+const SCHEMA_TIMEOUT = 30 * 1000;
+
 // Steps shown to the user while installing the proxy
 const INSTALL_STEPS = [
   { id: 'repo', label: 'Adding the Helm repository' },
@@ -212,8 +215,8 @@ export default {
         await this.runStep('install', () => this.installChart(repo, versionInfo));
         await this.runStep('proxy', () => this.waitForProxy());
 
-        // The chart installs the CRD for MLM servers - reload the schemas so the page switches to the list
-        await this.$store.dispatch('management/loadSchemas', true);
+        // The chart installs the CRD for MLM servers - wait for its schema so the page switches to the list
+        await this.waitForSchema();
         await this.$fetch();
       } catch (e) {
         this.error = e?.message || `${ e }`;
@@ -351,6 +354,22 @@ export default {
         }
 
         this.stepDetail = service ? 'Waiting for the proxy to respond' : 'Waiting for the proxy service to be created';
+        await sleep(POLL_INTERVAL);
+      }
+    },
+
+    // Rancher pushes new schemas over its websocket, so wait for the MLM server schema to show up.
+    // If it doesn't arrive, reload the page so the schemas are fetched again
+    async waitForSchema() {
+      const deadline = Date.now() + SCHEMA_TIMEOUT;
+
+      while (!this.$store.getters['management/schemaFor'](this.resource)) {
+        if (Date.now() > deadline) {
+          window.location.reload();
+
+          return;
+        }
+
         await sleep(POLL_INTERVAL);
       }
     },
