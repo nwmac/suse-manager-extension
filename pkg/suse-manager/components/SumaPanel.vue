@@ -2,7 +2,6 @@
 import { CAPI, MANAGEMENT } from '@shell/config/types';
 import { checkForSumaProxy, getSuseManagerConfig, sumaListRegistrations } from '../shared/api';
 import { groupPatches, sumaSystemForNode } from '../shared/utils';
-import Banner from '@components/Banner/Banner.vue';
 import SeverityIcon from './SeverityIcon.vue';
 import SumaNotification from './SumaNotification.vue';
 
@@ -15,7 +14,6 @@ export default {
   name: 'SumaPanel',
 
   components: {
-    Banner,
     SeverityIcon,
     SumaNotification,
  },
@@ -36,6 +34,8 @@ export default {
       registrations:        undefined,
       registrationsPollId:  null,
       lastRunningCount:     0,
+      // Status reported by the SumaNotification component (success, error, warning, info or null)
+      notificationStatus:   null,
     };
   },
 
@@ -58,6 +58,25 @@ export default {
   computed: {
     linkAnnotation() {
       return this.resource?.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION];
+    },
+
+    /**
+     * Overall status of the card, used to colour its border - the most significant of the messages being shown
+     */
+    cardStatus() {
+      const statuses = [this.notificationStatus];
+
+      if (this.loading?.error) {
+        statuses.push('error');
+      }
+
+      if (this.isCluster && this.activeRegistrationCount > 0) {
+        statuses.push('info');
+      } else if (this.isCluster && this.recentRegistrationFailures.length > 0) {
+        statuses.push('warning');
+      }
+
+      return ['error', 'warning', 'info', 'success'].find((s) => statuses.includes(s));
     },
 
     registrationsSummary() {
@@ -302,7 +321,10 @@ export default {
 </script>
 
 <template>
-  <div class="suma-panel" :class="{'border': !!sumaInfo}">
+  <div
+    class="suma-panel"
+    :class="{'border': !!sumaInfo, [`status-${ cardStatus }`]: !!sumaInfo && !!cardStatus}"
+  >
     <div
       class="suma-info"
       v-if="sumaInfo"
@@ -312,18 +334,19 @@ export default {
         <span v-if="isCluster">Machines in this cluster are managed by SUSE Multi-Linux Manager</span>
         <span v-else-if="isMachine">The Server for this machine is managed by SUSE Multi-Linux Manager</span>
         <span v-else>The Server for this node is managed by SUSE Multi-Linux Manager</span>
+        <!-- Keep the link text tight - the spacing before it comes from the mlm-link margin -->
         <router-link
+          class="mlm-link"
           :to="sumaInfo.link"
-        >
-        {{ sumaInfo.id }}
-        </router-link>
+        >{{ sumaInfo.id }}</router-link>
         <span class="soft">
           (System Group:
           <a
             v-if="sumaInfo.groupUrl"
             :href="sumaInfo.groupUrl"
             target="_blank"
-          >{{ sumaInfo.group }}</a>
+            rel="noopener noreferrer"
+          >{{ sumaInfo.group }} <i class="icon icon-external-link external" /></a>
           <template v-else>{{ sumaInfo.group }}</template>)
         </span>
       </div>
@@ -334,28 +357,29 @@ export default {
         </a>
       </div>
     </div>
-    <Banner
+    <div
       v-if="isCluster && activeRegistrationCount > 0"
-      class="registration-banner"
-      color="info"
+      class="msg-row"
     >
-      <div class="registration-busy">
-        <i class="icon icon-spinner icon-spin" />
+      <i class="icon icon-spinner icon-spin text-info" />
+      <span>
         Registering {{ activeRegistrationCount }} {{ activeRegistrationCount === 1 ? 'node' : 'nodes' }} with SUSE Multi-Linux Manager
         <span v-if="registrationsSummary?.done">— {{ registrationsSummary.done }} done</span><span v-if="registrationsSummary?.failed">, {{ registrationsSummary.failed }} failed</span>
-      </div>
-    </Banner>
-    <Banner
-      v-else-if="isCluster && recentRegistrationFailures.length > 0"
-      class="registration-banner"
-      color="warning"
-    >
-      {{ recentRegistrationFailures.length }} recent node
-      {{ recentRegistrationFailures.length === 1 ? 'registration' : 'registrations' }} failed.
-      <span v-for="(f, i) in recentRegistrationFailures" :key="f.nodeId || i" class="failure-detail">
-        {{ f.nodeName }}: {{ f.message }}<span v-if="i < recentRegistrationFailures.length - 1">;</span>
       </span>
-    </Banner>
+    </div>
+    <div
+      v-else-if="isCluster && recentRegistrationFailures.length > 0"
+      class="msg-row"
+    >
+      <i class="icon icon-warning text-warning" />
+      <span>
+        {{ recentRegistrationFailures.length }} recent node
+        {{ recentRegistrationFailures.length === 1 ? 'registration' : 'registrations' }} failed.
+        <span v-for="(f, i) in recentRegistrationFailures" :key="f.nodeId || i" class="failure-detail">
+          {{ f.nodeName }}: {{ f.message }}<span v-if="i < recentRegistrationFailures.length - 1">;</span>
+        </span>
+      </span>
+    </div>
     <div
       class="suma-detail"
       v-if="total"
@@ -379,11 +403,16 @@ export default {
         />
     </div>
     <SumaNotification
-      class="suma-notification"
+      class="msg-block"
       :resource="resource"
+      @status="notificationStatus = $event"
     />
-    <div v-if="loading.error">
-      <Banner color="error" :label="loading.error.error" />
+    <div
+      v-if="loading.error"
+      class="msg-row"
+    >
+      <i class="icon icon-error text-error" />
+      <span>{{ loading.error.error }}</span>
   </div>
 </div>
 </template>
@@ -395,6 +424,12 @@ export default {
     padding: 10px;
     margin-top: 20px;
     border-radius: var(--border-radius);
+    // Fade the border colour as the status of the card changes
+    transition: border-color 0.6s ease-in-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   }
 
   .suma-list {
@@ -417,32 +452,47 @@ export default {
     }
   }
 
-  // Indent banners to line up with the text after the MLM icon
-  .suma-notification ::v-deep .banner {
-    margin-bottom: 0;
-    margin-left: 29px;
-    margin-top: 10px;
-    width: auto;
+  // Colour the card to reflect the status of the messages it is showing
+  @each $status in success, error, warning, info {
+    &.border.status-#{$status} {
+      border-color: var(--#{$status});
+    }
   }
 
-  .registration-banner {
+  // External link icon shown after links that open MLM in a new tab
+  .external {
+    font-size: 12px;
+    margin-left: 2px;
+  }
+
+  .mlm-link {
+    margin-left: 4px;
+  }
+
+  // Status messages - an icon then the message, indented to line up with the text after the MLM icon
+  .msg-row {
+    align-items: center;
+    display: flex;
     margin-left: 29px;
     margin-top: 10px;
-    width: auto;
 
-    .registration-busy {
-      align-items: center;
-      display: flex;
-      line-height: 1;
-    }
-
-    i.icon-spinner {
-      margin-right: 6px;
+    > i {
+      flex-shrink: 0;
+      height: 16px;
+      line-height: 16px;
+      margin-right: 8px;
+      text-align: center;
+      width: 16px;
     }
 
     .failure-detail {
-      margin-right: 4px;
+      margin-left: 4px;
     }
+  }
+
+  .msg-block {
+    margin-left: 29px;
+    margin-top: 10px;
   }
 
   .suma-info {

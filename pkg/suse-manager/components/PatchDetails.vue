@@ -114,7 +114,7 @@ export default {
         :severity="patch.severity"
         class="severity"
       />
-      <span class="title-text">{{ patch.advisory_name }} - {{ patch.advisory_type }}</span>
+      <span class="title-text">{{ patch.advisory_name }}</span>
       <a
         v-if="patch.sumaErrataUrl"
         class="open-suma"

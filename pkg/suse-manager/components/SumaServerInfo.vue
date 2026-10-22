@@ -1,5 +1,6 @@
 <script>
 import Banner from '@components/Banner/Banner.vue';
+import { SUSE_MANAGER_NAMESPACE, SUMA_SERVER_RESOURCE_NAME } from '../shared/definitions';
 
 export default {
   name: 'SumaServerInfo',
@@ -24,20 +25,22 @@ export default {
       return !!(this.system && this.system.id);
     },
 
-    baseChannelLabel() {
-      const c = this.system?.baseChannel;
+    // Base URL of the MLM server this system is managed by
+    sumaURL() {
+      const id = this.system?.suseManagerId;
+      const mlm = id ? this.$store.getters['management/byId'](SUMA_SERVER_RESOURCE_NAME, `${ SUSE_MANAGER_NAMESPACE }/${ id }`) : undefined;
 
-      if (!c) {
-        return null;
-      }
-
-      return c.label || c.name;
+      return mlm?.spec?.url;
     },
 
-    childChannelLabels() {
-      const channels = this.system?.childChannels || [];
+    baseChannel() {
+      const c = this.system?.baseChannel;
 
-      return channels.map((c) => c.label || c.name).filter(Boolean);
+      return c ? this.channelInfo(c) : null;
+    },
+
+    childChannels() {
+      return (this.system?.childChannels || []).map(this.channelInfo).filter((c) => c.label);
     },
 
     installedProductsLabel() {
@@ -117,6 +120,30 @@ export default {
   },
 
   methods: {
+    // Label for a subscribed channel, with a link to its page in MLM (when we know the channel id and MLM URL)
+    openRebootDialog() {
+      if (!this.system?.suseManagerId || !this.system?.id) {
+        return;
+      }
+
+      this.$store.dispatch('management/promptModal', {
+        componentProps: {
+          sid:           this.system.id,
+          suseManagerId: this.system.suseManagerId,
+          systemName:    this.system.profile_name || this.system.hostname || '',
+        },
+        component:  'SuseManagerRebootDialog',
+        modalWidth: '450px',
+      });
+    },
+
+    channelInfo(c) {
+      return {
+        label: c.label || c.name,
+        url:   this.sumaURL && c.id ? `${ this.sumaURL }/rhn/channels/ChannelDetail.do?cid=${ c.id }` : undefined,
+      };
+    },
+
     formatDate(value) {
       if (!value) {
         return null;
@@ -188,21 +215,27 @@ export default {
             </div>
           </section>
 
-          <section class="card" v-if="baseChannelLabel || childChannelLabels.length">
+          <section class="card" v-if="baseChannel || childChannels.length">
             <header class="card-header">
               <h3>Subscribed Channels</h3>
             </header>
             <div class="card-body">
-              <div v-if="baseChannelLabel" class="channel-group">
+              <div v-if="baseChannel" class="channel-group">
                 <h4>Base Channel</h4>
                 <ul>
-                  <li>{{ baseChannelLabel }}</li>
+                  <li>
+                    <a v-if="baseChannel.url" :href="baseChannel.url" target="_blank" rel="noopener noreferrer">{{ baseChannel.label }}</a>
+                    <template v-else>{{ baseChannel.label }}</template>
+                  </li>
                 </ul>
               </div>
-              <div v-if="childChannelLabels.length" class="channel-group">
+              <div v-if="childChannels.length" class="channel-group">
                 <h4>Child Channels</h4>
                 <ul>
-                  <li v-for="label in childChannelLabels" :key="label">{{ label }}</li>
+                  <li v-for="c in childChannels" :key="c.label">
+                    <a v-if="c.url" :href="c.url" target="_blank" rel="noopener noreferrer">{{ c.label }}</a>
+                    <template v-else>{{ c.label }}</template>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -223,9 +256,24 @@ export default {
                 <dt v-if="formattedRegistered">Registered:</dt>
                 <dd v-if="formattedRegistered">{{ formattedRegistered }}</dd>
 
-                <dt v-if="formattedLastBoot">Last Booted:</dt>
-                <dd v-if="formattedLastBoot">{{ formattedLastBoot }}</dd>
+                <dt>Last Booted:</dt>
+                <dd>{{ formattedLastBoot || '—' }}</dd>
               </dl>
+              <div
+                v-if="system.reboot_required"
+                class="reboot-required"
+              >
+                <i class="icon icon-warning text-warning" />
+                <span>This system requires a reboot</span>
+              </div>
+              <div class="reboot-actions">
+                <button
+                  class="btn btn-sm role-secondary"
+                  @click="openRebootDialog"
+                >
+                  Reboot
+                </button>
+              </div>
             </div>
           </section>
 
@@ -265,6 +313,22 @@ export default {
 </template>
 
 <style lang="scss" scoped>
+  .reboot-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .reboot-required {
+    align-items: center;
+    display: flex;
+    margin-top: 10px;
+
+    > i {
+      margin-right: 8px;
+    }
+  }
+
   .suma-server-info {
     display: flex;
     flex-direction: column;

@@ -2,6 +2,8 @@
 import Loading from '@shell/components/Loading';
 import SortableTable from '@shell/components/SortableTable';
 import Banner from '@components/Banner/Banner.vue';
+import { CAPI } from '@shell/config/types';
+import { SUSE_MANAGER_LINK_ANNOTATION } from '../shared/definitions';
 import {
   sumaGetVersion,
   sumaGetSystemVersion,
@@ -34,6 +36,7 @@ export default {
       groups:       [],
       groupsError:  undefined,
       systemsError: undefined,
+      clusters:     [],
     };
   },
 
@@ -69,6 +72,10 @@ export default {
       }).catch((e) => {
         this.groupsError = e?.message || 'Unable to load system groups.';
       }),
+      // Provisioning clusters - used to link system groups to the clusters linked to them
+      this.$store.dispatch('management/findAll', { type: CAPI.RANCHER_CLUSTER }).then((c) => {
+        this.clusters = c || [];
+      }).catch(() => { /* No access to clusters - groups are just not linked */ }),
     ];
 
     await Promise.all(calls);
@@ -83,10 +90,31 @@ export default {
       return this.groups.length;
     },
 
+    // Map of system group name to the clusters linked to it on this MLM server
+    // (the link annotation on a provisioning cluster is `<mlm name>/<group name>`)
+    clustersByGroup() {
+      const id = this.value?.metadata?.name;
+      const map = {};
+
+      this.clusters.forEach((c) => {
+        const [mlm, group] = (c.metadata?.annotations?.[SUSE_MANAGER_LINK_ANNOTATION] || '').split('/');
+
+        if (mlm === id && group) {
+          (map[group] = map[group] || []).push(c);
+        }
+      });
+
+      return map;
+    },
+
     groupRows() {
       return this.groups.map((g) => ({
         ...g,
-        _key: `${ g.id }`,
+        _key:     `${ g.id }`,
+        clusters: this.clustersByGroup[g.name] || [],
+      })).map((g) => ({
+        ...g,
+        clusterNames: g.clusters.map((c) => c.nameDisplay).join(', '),
       }));
     },
 
@@ -97,6 +125,12 @@ export default {
           label: 'Name',
           value: 'name',
           sort:  ['name'],
+        },
+        {
+          name:  'clusters',
+          label: 'Linked Cluster',
+          value: 'clusterNames',
+          sort:  ['clusterNames'],
         },
         {
           name:  'description',
@@ -137,7 +171,7 @@ export default {
           :href="serverUrl"
           target="_blank"
           rel="noopener noreferrer"
-        >{{ serverUrl }}</a>
+        >{{ serverUrl }} <i class="icon icon-external-link external" /></a>
         <span v-else class="muted">—</span>
       </div>
 
@@ -183,7 +217,31 @@ export default {
       :row-actions="false"
       :search="true"
       :paging="true"
-    />
+    >
+      <template #cell:name="{ row }">
+        <a
+          v-if="serverUrl"
+          :href="`${ serverUrl }/rhn/groups/GroupDetail.do?sgid=${ row.id }`"
+          target="_blank"
+          rel="noopener noreferrer"
+        >{{ row.name }} <i class="icon icon-external-link external" /></a>
+        <span v-else>{{ row.name }}</span>
+      </template>
+      <template #cell:clusters="{ row }">
+        <span
+          v-if="!row.clusters.length"
+          class="text-muted"
+        >&mdash;</span>
+        <template
+          v-for="(c, i) in row.clusters"
+          :key="c.id"
+        >
+          <router-link :to="c.detailLocation">
+            {{ c.nameDisplay }}
+          </router-link><span v-if="i < row.clusters.length - 1">, </span>
+        </template>
+      </template>
+    </SortableTable>
 
     <Banner
       v-if="systemsError"
@@ -196,6 +254,12 @@ export default {
 </template>
 
 <style lang="scss" scoped>
+  // External link icon shown after links that open MLM in a new tab
+  .external {
+    font-size: 12px;
+    margin-left: 2px;
+  }
+
   .suma-detail {
     .info-grid {
       display: grid;

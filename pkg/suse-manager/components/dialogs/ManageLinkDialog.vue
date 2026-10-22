@@ -50,7 +50,9 @@ export default {
   },
 
   data() {
-    const clusterName = this.resources?.[0]?.metadata?.name || '';
+    // Suggest the cluster's display name - for some clusters (e.g. imported ones) the resource name is the cluster id (c-xxxxx)
+    const cluster = this.resources?.[0];
+    const clusterName = cluster?.nameDisplay || cluster?.metadata?.name || '';
 
     return {
       busy:                false,

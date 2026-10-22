@@ -1,13 +1,12 @@
 <script>
 import { mapGetters } from 'vuex';
-import { Banner } from '@components/Banner';
 import { allHash } from '@shell/utils/promise';
 import { CAPI, MANAGEMENT } from '@shell/config/types';
 import { formatActionLine } from '../shared/utils';
 
 export default {
   name:       'SumaNotification',
-  components: { Banner },
+  emits: ['status'],
 
   // The extension panel host (ExtensionPanel) passes the current detail
   // resource down as `resource` — this is the cluster, node, or machine
@@ -44,6 +43,27 @@ export default {
 
   computed: {
     ...mapGetters('suma', ['getSumaActionsInProgress', 'getNotifications']),
+
+    /**
+     * Status of what we are showing ('success' | 'error' | 'warning' | 'info'), or null when there is nothing to show.
+     * The parent card uses this to colour itself
+     */
+    status() {
+      if (this.getNotifications?.type) {
+        return this.getNotifications.type;
+      }
+
+      return this.displayActions.length ? 'info' : null;
+    },
+
+    notificationIcon() {
+      switch (this.status) {
+      case 'success': return 'icon-checkmark';
+      case 'error': return 'icon-error';
+      case 'warning': return 'icon-warning';
+      default: return 'icon-info';
+      }
+    },
 
     /**
      * Events in progress that relate to the currently displayed resource.
@@ -277,6 +297,13 @@ export default {
   },
 
   watch: {
+    status: {
+      handler(neu) {
+        this.$emit('status', neu);
+      },
+      immediate: true
+    },
+
     relevantActions: {
       handler(neu, old) {
         const hasNew = neu && neu.length;
@@ -341,39 +368,52 @@ export default {
 </script>
 
 <template>
-  <div>
-    <Banner
+  <div
+    v-if="status"
+    class="suma-notification"
+  >
+    <div
       v-if="getNotifications && getNotifications.type"
-      :color="getNotifications.type"
-      class="msg-banner"
+      class="msg-row"
     >
-      <p>{{ getNotifications.message }}</p>
-    </Banner>
-    <Banner
-      v-else-if="displayActions.length"
-      color="info"
-      class="msg-banner"
-    >
-      <p class="msg-title">
-        {{ t('suma.notification.title') + ':' }}
-      </p>
-      <p
+      <i :class="['icon', notificationIcon, `text-${ status }`]" />
+      <span>{{ getNotifications.message }}</span>
+    </div>
+    <template v-else>
+      <div class="msg-row">
+        <i class="icon icon-spinner icon-spin text-info" />
+        <span>{{ t('suma.notification.title') + ':' }}</span>
+      </div>
+      <div
         v-for="act in displayActions"
         :key="act.id"
+        class="msg-action"
       >
         {{ formatActionLine(act) }}
-      </p>
-    </Banner>
+      </div>
+    </template>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.msg-banner {
-  .msg-title {
-    margin-bottom: 10px;
+.suma-notification {
+  .msg-row {
+    align-items: center;
+    display: flex;
+
+    > i {
+      flex-shrink: 0;
+      height: 16px;
+      line-height: 16px;
+      margin-right: 8px;
+      text-align: center;
+      width: 16px;
+    }
   }
-  &::v-deep div {
-    display: block !important;
+
+  .msg-action {
+    margin-left: 24px;
+    margin-top: 4px;
   }
 }
 </style>
