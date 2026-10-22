@@ -147,6 +147,8 @@ plugin/suse-manager-0.6.5.umd.min.12.js
 plugin/suse-manager-0.6.5.umd.min.12.js.map
 plugin/suse-manager-0.6.5.umd.min.123.js
 plugin/suse-manager-0.6.5.umd.min.123.js.map
+plugin/suse-manager-0.6.5.umd.min.249.js
+plugin/suse-manager-0.6.5.umd.min.249.js.map
 plugin/suse-manager-0.6.5.umd.min.277.js
 plugin/suse-manager-0.6.5.umd.min.277.js.map
 plugin/suse-manager-0.6.5.umd.min.303.js
@@ -157,8 +159,6 @@ plugin/suse-manager-0.6.5.umd.min.370.js
 plugin/suse-manager-0.6.5.umd.min.370.js.map
 plugin/suse-manager-0.6.5.umd.min.486.js
 plugin/suse-manager-0.6.5.umd.min.486.js.map
-plugin/suse-manager-0.6.5.umd.min.495.js
-plugin/suse-manager-0.6.5.umd.min.495.js.map
 plugin/suse-manager-0.6.5.umd.min.530.js
 plugin/suse-manager-0.6.5.umd.min.530.js.map
 plugin/suse-manager-0.6.5.umd.min.60.js
@@ -179,14 +179,14 @@ plugin/suse-manager-0.6.5.umd.min.855.js
 plugin/suse-manager-0.6.5.umd.min.855.js.map
 plugin/suse-manager-0.6.5.umd.min.856.js
 plugin/suse-manager-0.6.5.umd.min.856.js.map
-plugin/suse-manager-0.6.5.umd.min.915.js
-plugin/suse-manager-0.6.5.umd.min.915.js.map
 plugin/suse-manager-0.6.5.umd.min.935.js
 plugin/suse-manager-0.6.5.umd.min.935.js.map
 plugin/suse-manager-0.6.5.umd.min.938.js
 plugin/suse-manager-0.6.5.umd.min.938.js.map
 plugin/suse-manager-0.6.5.umd.min.949.js
 plugin/suse-manager-0.6.5.umd.min.949.js.map
+plugin/suse-manager-0.6.5.umd.min.96.js
+plugin/suse-manager-0.6.5.umd.min.96.js.map
 plugin/suse-manager-0.6.5.umd.min.971.js
 plugin/suse-manager-0.6.5.umd.min.971.js.map
 plugin/suse-manager-0.6.5.umd.min.974.js
