@@ -6,6 +6,7 @@ export const CLUSTER_MGMT = 'manager';
 export function init(plugin, store) {
   const {
     basicType,
+    configureType,
     headers,
     mapGroup,
     weightType,
@@ -40,6 +41,10 @@ export function init(plugin, store) {
   ]);
 
   weightType(SUMA_SERVER, -1);
+
+  // The list component renders its own masthead - only once the MLM server schema exists
+  // (before the proxy is installed, it shows the install page instead)
+  configureType(SUMA_SERVER, { showListMasthead: false });
 
   // headers(UI_PLUGIN, [
   //   STATE,

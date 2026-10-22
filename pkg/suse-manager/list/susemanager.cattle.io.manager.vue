@@ -156,15 +156,6 @@ export default {
     }
   },
 
-  // This is a hacky workaround
-  typeDisplay() {
-    const schema = this.$store.getters[`management/schemaFor`](this.resource);
-
-    this.showMasthead = !!schema;
-
-    return 'SUSE Multi-Linux Manager';
-  },
-
   computed: {
     installSteps() {
       return INSTALL_STEPS.map((step) => ({ ...step, status: this.stepStatus[step.id] }));
@@ -187,15 +178,10 @@ export default {
     allSchemas(neu, old) {
       const n = neu?.find((s) => s.id === this.resource);
 
-      if ((!this.haveSchema && n) || (this.haveSchema && !n)) {
-        this.$router.replace({
-          name: 'c-cluster-manager-suse-manager',
-          path: '/c/:cluster/manager/suse-manager',
-          params: {
-            product: 'manager',
-            cluster: '_',
-          }
-        });
+      // The proxy was installed or removed elsewhere - refresh to switch between the install page and the list.
+      // While we are installing, enable() takes care of this once the install completes
+      if (!this.busy && ((!this.haveSchema && n) || (this.haveSchema && !n))) {
+        this.$fetch();
       }
     }
   },
@@ -384,6 +370,10 @@ export default {
 <template>
   <div>
     <div v-if="haveSchema">
+      <Masthead
+        :resource="resource"
+        :schema="schema"
+      />
       <ProxyStatus />
       <ResourceTable
         :loading="loading"
